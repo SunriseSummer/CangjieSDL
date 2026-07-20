@@ -1,0 +1,9 @@
+[package]
+cjc-version = "1.0.5"
+name = "calculator"
+version = "0.1.0"
+output-type = "executable"
+description = "Calculator example built on the Cangjie sdl module."
+
+[dependencies]
+sdl = { path = "../.." }

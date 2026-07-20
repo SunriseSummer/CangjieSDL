@@ -1,0 +1,9 @@
+[package]
+cjc-version = "1.0.5"
+name = "contra"
+version = "0.1.0"
+output-type = "executable"
+description = "Neon Commando, a polished one-stage run-and-gun example built with Cangjie SDL."
+
+[dependencies]
+sdl = { path = "../.." }

@@ -1,0 +1,9 @@
+target/
+**/target/
+__pycache__/
+.todo/
+.agents/
+.claude/
+.idea/
+.vscode/
+cjpm.lock
