@@ -1,6 +1,6 @@
 package sdl.system
 
-import sdl.{CuiException, ensureSdl}
+import sdl.{SdlException, ensureSdl}
 
 internal func appMetadataPropertyName(property: AppMetadataProperty): String {
     match (property) {
@@ -51,7 +51,7 @@ internal func setOptionalMetadataType(appType: ?AppMetadataType): Unit {
     }
 }
 
-internal func withMetadataStrings(property: AppMetadataProperty, value: String, hasValue: Bool): Unit {
+internal func withMetadataStrings(property: AppMetadataProperty, value: String, hasValue!: Bool): Unit {
     let cName = unsafe { LibC.mallocCString(appMetadataPropertyName(property)) }
     let cValue = if (hasValue) {
         unsafe { LibC.mallocCString(value) }
@@ -67,10 +67,10 @@ internal func withMetadataStrings(property: AppMetadataProperty, value: String, 
 }
 
 /**
- * Throws `CuiException` when a custom metadata property name is empty.
+ * Throws `SdlException` when a custom metadata property name is empty.
  */
 internal func ensureMetadataName(name: String): Unit {
     if (name.size <= 0) {
-        throw CuiException("Application metadata property name cannot be empty.")
+        throw SdlException("Application metadata property name cannot be empty.")
     }
 }

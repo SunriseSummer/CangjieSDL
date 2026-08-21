@@ -1,6 +1,6 @@
 package sdl.system
 
-import sdl.CuiException
+import sdl.SdlException
 
 @Test
 func userFolderCodeMapsSdlValues(): Unit {
@@ -34,7 +34,7 @@ private func preferencePathFails(org: String, app: String): Bool {
     try {
         let _ = ApplicationPaths.preferencePath(org, app)
         false
-    } catch (e: CuiException) {
+    } catch (e: SdlException) {
         true
     }
 }

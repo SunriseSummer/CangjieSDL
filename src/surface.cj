@@ -1,5 +1,10 @@
 package sdl
 
+/**
+ * A CPU-side RGBA pixel buffer wrapping an SDL_Surface — the staging ground for loading image
+ * files, writing pixels, and saving BMPs before uploading to a GPU `Texture`. Close it to free
+ * the native surface; reusing a closed surface throws `SdlException`.
+ */
 public class Surface <: Resource {
     internal let ptr: CPointer<Unit>
     private var closed = false
@@ -9,16 +14,20 @@ public class Surface <: Resource {
     }
 
     /**
-     * Throws `CuiException` when SDL cannot allocate an RGBA surface.
+     * Throws `SdlException` when SDL cannot allocate an RGBA surface.
      */
     public static func create(width: Int32, height: Int32): Surface {
         let surface = unsafe { SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGBA32) }
         if (surface.isNull()) {
-            throw CuiException("SDL_CreateSurface failed: ${lastSdlError()}")
+            throw SdlException("SDL_CreateSurface failed: ${lastSdlError()}")
         }
         Surface(surface)
     }
 
+    /**
+     * Loads an image file, picking the decoder from the path's extension (`.png` reads as PNG,
+     * anything else as BMP). Throws `SdlException` when the file cannot be loaded.
+     */
     public static func load(path: String): Surface {
         match (imageFormatFromPath(path)) {
             case ImageFileFormat.Png => return loadPng(path)
@@ -26,14 +35,20 @@ public class Surface <: Resource {
         }
     }
 
+    /** Loads a BMP file (SDL_LoadBMP). Throws `SdlException` when the file cannot be loaded. */
     public static func loadBmp(path: String): Surface {
         loadWith(path, ImageFileFormat.Bmp)
     }
 
+    /** Loads a PNG file (SDL_LoadPNG). Throws `SdlException` when the file cannot be loaded. */
     public static func loadPng(path: String): Surface {
         loadWith(path, ImageFileFormat.Png)
     }
 
+    /**
+     * Fills the whole surface with `color` (SDL_ClearSurface).
+     * Throws `SdlException` when the surface is closed or SDL cannot clear it.
+     */
     public func clear(color: Color): Unit {
         ensureOpen()
         ensureSdl(unsafe {
@@ -47,12 +62,20 @@ public class Surface <: Resource {
         }, "SDL_ClearSurface")
     }
 
+    /**
+     * Sets the pixel at (`x`, `y`) to `color` (SDL_WriteSurfacePixel).
+     * Throws `SdlException` when the surface is closed or the write fails.
+     */
     public func writePixel(x: Int32, y: Int32, color: Color): Unit {
         ensureOpen()
         ensureSdl(unsafe { SDL_WriteSurfacePixel(ptr, x, y, color.r, color.g, color.b, color.a) },
             "SDL_WriteSurfacePixel")
     }
 
+    /**
+     * Writes the surface to a BMP file (SDL_SaveBMP).
+     * Throws `SdlException` when the surface is closed or SDL cannot save the file.
+     */
     public func saveBmp(path: String): Unit {
         ensureOpen()
         let cPath = unsafe { LibC.mallocCString(path) }
@@ -61,37 +84,39 @@ public class Surface <: Resource {
         }
     }
 
+    /** Whether `close` has already been called; a closed surface throws on reuse. */
     public func isClosed(): Bool {
         closed
     }
 
+    /** Frees the native surface (SDL_DestroySurface); safe to call more than once. */
     public func close(): Unit {
         if (closed) {
             return
         }
         closed = true
-        unsafe {
-            if (ptr.isNotNull()) {
-                SDL_DestroySurface(ptr)
-            }
+        if (ptr.isNotNull()) {
+            unsafe { SDL_DestroySurface(ptr) }
         }
     }
 
     /**
-     * Throws `CuiException` when a closed surface is reused.
+     * Throws `SdlException` when a closed surface is reused.
      */
     private func ensureOpen(): Unit {
         if (closed) {
-            throw CuiException("Surface is already closed.")
+            throw SdlException("Surface is already closed.")
         }
     }
 }
 
+/** The image file formats surface loading understands. */
 public enum ImageFileFormat {
     | Bmp
     | Png
 }
 
+/** The image format implied by a path's extension: `.png`/`.PNG` is PNG, anything else BMP. */
 public func imageFormatFromPath(path: String): ImageFileFormat {
     if (path.endsWith(".png") || path.endsWith(".PNG")) {
         ImageFileFormat.Png
@@ -101,7 +126,7 @@ public func imageFormatFromPath(path: String): ImageFileFormat {
 }
 
 /**
- * Throws `CuiException` when SDL cannot load the requested image file.
+ * Throws `SdlException` when SDL cannot load the requested image file.
  */
 private func loadWith(path: String, format: ImageFileFormat): Surface {
     let cPath = unsafe { LibC.mallocCString(path) }
@@ -113,7 +138,7 @@ private func loadWith(path: String, format: ImageFileFormat): Surface {
         }
     }
     if (surface.isNull()) {
-        throw CuiException("Image load failed for '${path}': ${lastSdlError()}")
+        throw SdlException("Image load failed for '${path}': ${lastSdlError()}")
     }
     Surface(surface)
 }

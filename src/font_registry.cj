@@ -36,7 +36,7 @@ public class Fonts {
 
     /** Removes `name` from the registry; a no-op if it was never registered. */
     public static func unregister(name: String): Unit {
-        let _ = registered.remove(name)
+        let _ = registered.remove(name) // cjcheck-ignore: ignore-result # removal is idempotent here; a miss means nothing to evict
     }
 
     /** Clears every registration. Chiefly for test isolation. */

@@ -1,6 +1,6 @@
 package sdl.system
 
-import sdl.CuiException
+import sdl.SdlException
 
 @Test
 func appMetadataPropertyNamesMapSdlValues(): Unit {
@@ -31,7 +31,7 @@ private func metadataSetFails(property: AppMetadataProperty): Bool {
     try {
         ApplicationMetadata.set(property, "value")
         false
-    } catch (e: CuiException) {
+    } catch (e: SdlException) {
         true
     }
 }

@@ -15,13 +15,11 @@ internal func allocateFileDialogResources(id: Int64, options: FileDialogOptions)
         freeDialogCStringArray(names)
         freeDialogCStringArray(patterns)
         freeDialogCString(defaultLocation)
-        unsafe {
-            if (rawFilters.isNotNull()) {
-                LibC.free(rawFilters)
-            }
-            if (idPtr.isNotNull()) {
-                LibC.free(idPtr)
-            }
+        if (rawFilters.isNotNull()) {
+            unsafe { LibC.free(rawFilters) }
+        }
+        if (idPtr.isNotNull()) {
+            unsafe { LibC.free(idPtr) }
         }
         throw e
     }

@@ -1,5 +1,9 @@
 package sdl.input
 
+/**
+ * A decoded keyboard modifier mask: per-modifier flags plus `command`, which is true
+ * when either Ctrl or the GUI key is held (the platform-neutral shortcut modifier).
+ */
 public struct KeyModifiers {
     public let raw: UInt16
     public let shift: Bool
@@ -28,7 +32,9 @@ public struct KeyModifiers {
     }
 }
 
+/** Main-thread access to global keyboard state. */
 public class Keyboard {
+    /** The modifier keys held right now, decoded from SDL's current modifier state. */
     public static func modifiers(): KeyModifiers {
         KeyModifiers(unsafe { SDL_GetModState() })
     }

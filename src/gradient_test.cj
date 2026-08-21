@@ -3,7 +3,7 @@ package sdl
 // Exercises the real gradient geometry path (emitMeshGradient + SDL_RenderGeometry) on a window
 // renderer: both axes must draw without throwing. Pixel correctness is verified by example snapshots.
 @Test
-func fillsRoundedRectGradientWithoutError(): Unit {
+func fillsRoundedRectGradientWithoutError(): Unit { // cjcheck-ignore: smoke-test # deliberate reach-the-end smoke test: pixel output cannot be asserted headlessly; correctness is covered by example snapshots
     let window = SdlWindow(WindowSpec("Gradient test", 220, 140))
     try {
         let renderer = window.renderer

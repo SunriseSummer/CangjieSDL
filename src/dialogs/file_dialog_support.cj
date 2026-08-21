@@ -3,7 +3,7 @@ package sdl.dialogs
 import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicInt64
-import sdl.{lastSdlError, SdlWindow}
+import sdl.lastSdlError
 
 internal let FILE_DIALOG_MAX_FILTERS: Int64 = 64
 private let FILE_DIALOG_NEXT_ID = AtomicInt64(1)
@@ -46,13 +46,11 @@ internal class FileDialogNativeResources {
         freeDialogCStringArray(filterNames)
         freeDialogCStringArray(filterPatterns)
         freeDialogCString(defaultLocation)
-        unsafe {
-            if (rawFilters.isNotNull()) {
-                LibC.free(rawFilters)
-            }
-            if (idPtr.isNotNull()) {
-                LibC.free(idPtr)
-            }
+        if (rawFilters.isNotNull()) {
+            unsafe { LibC.free(rawFilters) }
+        }
+        if (idPtr.isNotNull()) {
+            unsafe { LibC.free(idPtr) }
         }
     }
 }
@@ -62,15 +60,8 @@ internal func createFileDialogRequest(options: FileDialogOptions): FileDialogReq
     let id = FILE_DIALOG_NEXT_ID.fetchAdd(1)
     let resources = allocateFileDialogResources(id, options)
     let request = FileDialogRequest(id, resources)
-    let _ = FILE_DIALOG_REQUESTS.add(id, request)
+    let _ = FILE_DIALOG_REQUESTS.add(id, request) // cjcheck-ignore: ignore-result # id comes from a monotonic atomic counter; no displaced entry can exist
     request
-}
-
-internal func fileDialogWindow(window: ?SdlWindow): CPointer<Unit> {
-    match (window) {
-        case Some(parent) => parent.windowPtr
-        case None => CPointer<Unit>()
-    }
 }
 
 @C

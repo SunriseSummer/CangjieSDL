@@ -64,7 +64,7 @@ main(): Unit {
 
 ## 相关 API
 
-- [`CuiException`](../../api/sdl/CuiException.md)：原生失败转换后的异常。
+- [`SdlException`](../../api/sdl/SdlException.md)：原生失败转换后的异常。
 - [`SdlWindow`](../../api/sdl/SdlWindow.md)：窗口与字体后端初始化边界。
 - [`Fonts`](../../api/sdl/Fonts.md)：应用字体注册。
 - [`sdl` 包](../../api/sdl/index.md)：版本与包级入口。

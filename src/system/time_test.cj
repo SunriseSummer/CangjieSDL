@@ -1,9 +1,9 @@
 package sdl.system
 
-import sdl.CuiException
+import sdl.SdlException
 
 @Test
-func dateAndClockFormatsMapSdlValues(): Unit {
+func dateAndClockFormatsMapSdlValues(): Unit { // cjcheck-ignore: smoke-test # assertions live in the expect* helpers this test calls; each ends in @Expect/@Fail
     expectYearMonthDay(dateFormatFromCode(SDL_DATE_FORMAT_YYYYMMDD))
     expectDayMonthYear(dateFormatFromCode(SDL_DATE_FORMAT_DDMMYYYY))
     expectMonthDayYear(dateFormatFromCode(SDL_DATE_FORMAT_MMDDYYYY))
@@ -87,7 +87,7 @@ private func daysInMonthFails(year: Int32, month: Int32): Bool {
     try {
         let _ = Time.daysInMonth(year, month)
         false
-    } catch (e: CuiException) {
+    } catch (e: SdlException) {
         true
     }
 }

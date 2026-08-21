@@ -1,6 +1,6 @@
 package sdl.dialogs
 
-import sdl.{CuiException}
+import sdl.{SdlException}
 
 @Test
 func fileDialogFilterPatternsValidateSdlRules(): Unit {
@@ -20,7 +20,7 @@ func fileDialogOptionsRejectInvalidFilters(): Unit {
 }
 
 @Test
-func fileDialogResultConvertsNullAndCancelStates(): Unit {
+func fileDialogResultConvertsNullAndCancelStates(): Unit { // cjcheck-ignore: smoke-test # assertions live in the expect* helpers this test calls; each ends in @Expect/@Fail
     expectDialogFailed(fileDialogResultFromPointer(CPointer<CPointer<UInt8>>(), -1))
 
     let list = unsafe { LibC.malloc<CPointer<UInt8>>(count: 1) }
@@ -60,7 +60,7 @@ private func fileDialogOptionsFail(filters: Array<FileDialogFilter>): Bool {
     try {
         ensureFileDialogOptions(FileDialogOptions(filters: filters))
         false
-    } catch (e: CuiException) {
+    } catch (e: SdlException) {
         true
     }
 }

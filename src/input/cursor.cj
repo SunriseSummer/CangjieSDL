@@ -1,7 +1,8 @@
 package sdl.input
 
-import sdl.{CuiException, ensureSdl, lastSdlError}
+import sdl.{SdlException, ensureSdl, lastSdlError}
 
+/** The standard OS cursor shapes SDL can create (arrow, text beam, resize arrows, and so on). */
 public enum SystemCursor {
     | Default
     | Text
@@ -25,6 +26,10 @@ public enum SystemCursor {
     | WResize
 }
 
+/**
+ * An owned native mouse cursor; create one with `system`, activate it with `setActive`,
+ * and release it with `close` (which restores the default cursor).
+ */
 public class Cursor <: Resource {
     private let ptr: CPointer<Unit>
     private var closed = false
@@ -34,68 +39,69 @@ public class Cursor <: Resource {
     }
 
     /**
-     * Throws `CuiException` when SDL cannot create the requested native system cursor.
+     * Throws `SdlException` when SDL cannot create the requested native system cursor.
      */
     public static func system(kind: SystemCursor): Cursor {
         let cursor = unsafe { SDL_CreateSystemCursor(systemCursorCode(kind)) }
         if (cursor.isNull()) {
-            throw CuiException("SDL_CreateSystemCursor failed: ${lastSdlError()}")
+            throw SdlException("SDL_CreateSystemCursor failed: ${lastSdlError()}")
         }
         Cursor(cursor)
     }
 
     /**
-     * Throws `CuiException` when a closed cursor is reused or SDL cannot activate it.
+     * Throws `SdlException` when a closed cursor is reused or SDL cannot activate it.
      */
     public func setActive(): Unit {
         ensureOpen()
         ensureSdl(unsafe { SDL_SetCursor(ptr) }, "SDL_SetCursor")
     }
 
+    /** Whether this cursor has been closed and can no longer be activated. */
     public func isClosed(): Bool {
         closed
     }
 
+    /** Destroys the native cursor, restoring the default cursor first; safe to call more than once. */
     public func close(): Unit {
         if (closed) {
             return
         }
         closed = true
-        unsafe {
-            if (ptr.isNotNull()) {
-                let defaultCursor = SDL_GetDefaultCursor()
-                if (defaultCursor.isNotNull()) {
-                    let _ = SDL_SetCursor(defaultCursor)
-                }
-                SDL_DestroyCursor(ptr)
+        if (ptr.isNotNull()) {
+            let defaultCursor = unsafe { SDL_GetDefaultCursor() }
+            if (defaultCursor.isNotNull()) {
+                let _ = unsafe { SDL_SetCursor(defaultCursor) } // cjcheck-ignore: ignore-result # shutdown path is best-effort: the resource is being destroyed regardless
             }
+            unsafe { SDL_DestroyCursor(ptr) }
         }
     }
 
     /**
-     * Throws `CuiException` when SDL cannot show the OS cursor.
+     * Throws `SdlException` when SDL cannot show the OS cursor.
      */
     public static func show(): Unit {
         ensureSdl(unsafe { SDL_ShowCursor() }, "SDL_ShowCursor")
     }
 
     /**
-     * Throws `CuiException` when SDL cannot hide the OS cursor.
+     * Throws `SdlException` when SDL cannot hide the OS cursor.
      */
     public static func hide(): Unit {
         ensureSdl(unsafe { SDL_HideCursor() }, "SDL_HideCursor")
     }
 
+    /** Whether the OS cursor is currently shown. */
     public static func isVisible(): Bool {
         unsafe { SDL_CursorVisible() }
     }
 
     /**
-     * Throws `CuiException` when a closed cursor is reused.
+     * Throws `SdlException` when a closed cursor is reused.
      */
     private func ensureOpen(): Unit {
         if (closed) {
-            throw CuiException("Cursor is already closed.")
+            throw SdlException("Cursor is already closed.")
         }
     }
 }

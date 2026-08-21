@@ -1,8 +1,9 @@
 package sdl.system
 
 import std.collection.ArrayList
-import sdl.{CuiException, ensureSdl, lastSdlError}
+import sdl.{SdlException, ensureSdl, lastSdlError}
 
+/** Classifies what a filesystem path refers to when queried through SDL. */
 public enum FileSystemEntryType {
     | Missing
     | File
@@ -10,6 +11,7 @@ public enum FileSystemEntryType {
     | Other
 }
 
+/** Describes a filesystem entry: its type, size in bytes, and SDL timestamps in nanoseconds. */
 public struct PathInfo {
     public let entryType: FileSystemEntryType
     public let size: UInt64
@@ -32,9 +34,10 @@ public struct PathInfo {
     }
 }
 
+/** Performs filesystem operations (create, remove, rename, copy, query, glob) through SDL. */
 public class FileSystem {
     /**
-     * Throws `CuiException` when the path is empty or SDL cannot create the directory tree.
+     * Throws `SdlException` when the path is empty or SDL cannot create the directory tree.
      */
     public static func createDirectory(path: String): Unit {
         ensurePathValue(path, "Path")
@@ -45,7 +48,7 @@ public class FileSystem {
     }
 
     /**
-     * Throws `CuiException` when the path is empty or SDL cannot remove the file or empty directory.
+     * Throws `SdlException` when the path is empty or SDL cannot remove the file or empty directory.
      */
     public static func remove(path: String): Unit {
         ensurePathValue(path, "Path")
@@ -56,7 +59,7 @@ public class FileSystem {
     }
 
     /**
-     * Throws `CuiException` when either path is empty or SDL cannot rename the file or directory.
+     * Throws `SdlException` when either path is empty or SDL cannot rename the file or directory.
      */
     public static func rename(oldPath: String, newPath: String): Unit {
         ensurePathValue(oldPath, "Old path")
@@ -71,7 +74,7 @@ public class FileSystem {
     }
 
     /**
-     * Throws `CuiException` when either path is empty or SDL cannot copy the source file.
+     * Throws `SdlException` when either path is empty or SDL cannot copy the source file.
      */
     public static func copyFile(source: String, destination: String): Unit {
         ensurePathValue(source, "Source path")
@@ -86,7 +89,7 @@ public class FileSystem {
     }
 
     /**
-     * Throws `CuiException` when the path is empty.
+     * Throws `SdlException` when the path is empty.
      */
     public static func pathInfo(path: String): ?PathInfo {
         ensurePathValue(path, "Path")
@@ -103,7 +106,7 @@ public class FileSystem {
     }
 
     /**
-     * Throws `CuiException` when the path is empty.
+     * Throws `SdlException` when the path is empty.
      */
     public static func exists(path: String): Bool {
         match (pathInfo(path)) {
@@ -113,7 +116,7 @@ public class FileSystem {
     }
 
     /**
-     * Throws `CuiException` when the path is empty or SDL cannot enumerate the directory.
+     * Throws `SdlException` when the path is empty or SDL cannot enumerate the directory.
      */
     public static func globDirectory(
         path: String,
@@ -161,13 +164,13 @@ internal func globFlags(caseInsensitive: Bool): UInt32 {
 }
 
 /**
- * Throws `CuiException` when SDL cannot enumerate the directory.
+ * Throws `SdlException` when SDL cannot enumerate the directory.
  */
 private func globDirectoryRaw(path: CString, pattern: CString, flags: UInt32): Array<String> {
     var count: Int32 = 0
     let entries = unsafe { SDL_GlobDirectory(path, pattern, flags, inout count) }
     if (entries.isNull()) {
-        throw CuiException("SDL_GlobDirectory failed: ${lastSdlError()}")
+        throw SdlException("SDL_GlobDirectory failed: ${lastSdlError()}")
     }
 
     try {
@@ -189,10 +192,10 @@ private func nullCString(): CString {
 }
 
 /**
- * Throws `CuiException` when a filesystem path argument is empty.
+ * Throws `SdlException` when a filesystem path argument is empty.
  */
 private func ensurePathValue(value: String, name: String): Unit {
     if (value.size <= 0) {
-        throw CuiException("${name} cannot be empty.")
+        throw SdlException("${name} cannot be empty.")
     }
 }

@@ -1,6 +1,6 @@
 package sdl.dialogs
 
-import sdl.{CuiException, SdlWindow}
+import sdl.{SdlException, SdlWindow}
 
 private let MESSAGE_BOX_MAX_BUTTONS: Int64 = 32
 
@@ -62,15 +62,15 @@ internal func rawMessageBoxColorScheme(scheme: MessageBoxColorScheme): SdlMessag
 }
 
 /**
- * Throws `CuiException` when message box buttons are empty, too many, unlabeled, or duplicated.
+ * Throws `SdlException` when message box buttons are empty, too many, unlabeled, or duplicated.
  */
 internal func ensureMessageBoxOptions(options: MessageBoxOptions): Unit {
     let count = options.buttons.size
     if (count <= 0) {
-        throw CuiException("Message box requires at least one button.")
+        throw SdlException("Message box requires at least one button.")
     }
     if (count > MESSAGE_BOX_MAX_BUTTONS) {
-        throw CuiException("Message box supports at most ${MESSAGE_BOX_MAX_BUTTONS} buttons.")
+        throw SdlException("Message box supports at most ${MESSAGE_BOX_MAX_BUTTONS} buttons.")
     }
     for (i in 0..count) {
         ensureMessageBoxButton(options.buttons[i])
@@ -78,7 +78,9 @@ internal func ensureMessageBoxOptions(options: MessageBoxOptions): Unit {
     }
 }
 
-internal func messageBoxWindow(window: ?SdlWindow): CPointer<Unit> {
+// The native handle of an optional parent window; null parents the dialog to the desktop.
+// Shared by the message-box and file-dialog wrappers.
+internal func parentWindowPtr(window: ?SdlWindow): CPointer<Unit> {
     match (window) {
         case Some(parent) => parent.windowPtr
         case None => CPointer<Unit>()
@@ -130,21 +132,21 @@ internal func freeButtonTexts(buttonTexts: Array<CString>): Unit {
 }
 
 /**
- * Throws `CuiException` when a button cannot be safely passed to SDL.
+ * Throws `SdlException` when a button cannot be safely passed to SDL.
  */
 private func ensureMessageBoxButton(button: MessageBoxButton): Unit {
     if (button.label.size <= 0) {
-        throw CuiException("Message box button label cannot be empty.")
+        throw SdlException("Message box button label cannot be empty.")
     }
 }
 
 /**
- * Throws `CuiException` when two message box buttons would report the same id.
+ * Throws `SdlException` when two message box buttons would report the same id.
  */
 private func ensureUniqueButtonId(buttons: Array<MessageBoxButton>, index: Int64): Unit {
     for (i in 0..index) {
         if (buttons[i].id == buttons[index].id) {
-            throw CuiException("Message box button ids must be unique.")
+            throw SdlException("Message box button ids must be unique.")
         }
     }
 }

@@ -74,7 +74,7 @@ public enum UiEvent {
     | Unknown(UInt32)
 }
 
-internal func decodeEvent(raw: SdlEvent): UiEvent {
+internal func decodeEvent(raw: SdlEvent): UiEvent { // cjcheck-ignore: long-function # flat one-branch-per-SDL-event-type decode table; each arm is a single struct read
     let eventPtr = unsafe { LibC.malloc<SdlEvent>() }
     var decoded = UiEvent.Unknown(UInt32(0))
     try (eventResource = eventPtr.asResource()) {

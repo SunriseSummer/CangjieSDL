@@ -30,14 +30,17 @@ public struct Color {
         this.a = a
     }
 
+    /** An opaque color from 0-255 channel values; out-of-range values are clamped. */
     public static func rgb(r: Int64, g: Int64, b: Int64): Color {
         Color(toByte(r), toByte(g), toByte(b))
     }
 
+    /** A color from 0-255 channel values including alpha; out-of-range values are clamped. */
     public static func rgba(r: Int64, g: Int64, b: Int64, a: Int64): Color {
         Color(toByte(r), toByte(g), toByte(b), toByte(a))
     }
 
+    /** A copy of this color at the given 0-255 opacity; out-of-range values are clamped. */
     public func withAlpha(alpha: Int64): Color {
         Color(r, g, b, toByte(alpha))
     }
@@ -104,6 +107,7 @@ public struct Size {
         this.h = h
     }
 
+    /** A size with both extents zero. */
     public static func zero(): Size {
         Size(0.0, 0.0)
     }
@@ -133,10 +137,12 @@ public struct Insets {
         this.left = left
     }
 
+    /** The combined left and right spacing — what layout subtracts from an available width. */
     public func horizontal(): Float32 {
         left + right
     }
 
+    /** The combined top and bottom spacing — what layout subtracts from an available height. */
     public func vertical(): Float32 {
         top + bottom
     }
@@ -161,38 +167,47 @@ public struct Rect {
         this.h = h
     }
 
+    /** A rectangle at the origin with zero extent. */
     public static func zero(): Rect {
         Rect(0.0, 0.0, 0.0, 0.0)
     }
 
+    /** The x coordinate of the right edge (`x + w`). */
     public func right(): Float32 {
         x + w
     }
 
+    /** The y coordinate of the bottom edge (`y + h`). */
     public func bottom(): Float32 {
         y + h
     }
 
+    /** The x coordinate of the rectangle's center. */
     public func centerX(): Float32 {
         x + w / 2.0
     }
 
+    /** The y coordinate of the rectangle's center. */
     public func centerY(): Float32 {
         y + h / 2.0
     }
 
+    /** A copy shrunk by `value` on every edge; extents clamp to zero rather than going negative. */
     public func inset(value: Float32): Rect {
         Rect(x + value, y + value, max(0.0, w - value * 2.0), max(0.0, h - value * 2.0))
     }
 
+    /** A copy shrunk by per-edge insets; extents clamp to zero rather than going negative. */
     public func inset(edges: Insets): Rect {
         Rect(x + edges.left, y + edges.top, max(0.0, w - edges.horizontal()), max(0.0, h - edges.vertical()))
     }
 
+    /** A copy translated by (`dx`, `dy`) with the same extent. */
     public func shift(dx: Float32, dy: Float32): Rect {
         Rect(x + dx, y + dy, w, h)
     }
 
+    /** Whether the point lies inside the rectangle; all four edges count as inside. */
     public func contains(px: Float32, py: Float32): Bool {
         px >= x && px <= right() && py >= y && py <= bottom()
     }
@@ -223,6 +238,7 @@ public struct Rect {
     }
 }
 
+/** Clamps `value` to `[low, high]` in `Float32` — the float clamp used throughout drawing and layout. */
 public func clampF32(value: Float32, low: Float32, high: Float32): Float32 {
     Float32(clamp(Float64(value), Float64(low), Float64(high)))
 }

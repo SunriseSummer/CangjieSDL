@@ -4,7 +4,7 @@
 
 `sdl.input` 包中的 public class
 
-一个原生鼠标光标对象，加上光标显隐的静态控制。经 [`system`](#system) 从系统形状创建，[`setActive`](#setactive) 生效；[`close`](#close) 会先切回默认光标再销毁，避免活动光标指向已释放的对象。SDL 无法创建、切换或显示/隐藏光标时，方法把失败状态转换为 `CuiException`。
+一个原生鼠标光标对象，加上光标显隐的静态控制。经 [`system`](#system) 从系统形状创建，[`setActive`](#setactive) 生效；[`close`](#close) 会先切回默认光标再销毁，避免活动光标指向已释放的对象。SDL 无法创建、切换或显示/隐藏光标时，方法把失败状态转换为 `SdlException`。
 
 ## 声明
 
@@ -69,7 +69,7 @@ public static func system(kind: SystemCursor): Cursor
 
 **异常**
 
-- `CuiException` — SDL 无法创建该原生光标时。
+- `SdlException` — SDL 无法创建该原生光标时。
 
 ### setActive
 
@@ -81,7 +81,7 @@ public func setActive(): Unit
 
 **异常**
 
-- `CuiException` — 光标已关闭，或 SDL 无法激活时。
+- `SdlException` — 光标已关闭，或 SDL 无法激活时。
 
 ### isClosed
 
@@ -111,7 +111,7 @@ public static func show(): Unit
 
 **异常**
 
-- `CuiException` — SDL 无法显示光标时。
+- `SdlException` — SDL 无法显示光标时。
 
 ### hide
 
@@ -123,7 +123,7 @@ public static func hide(): Unit
 
 **异常**
 
-- `CuiException` — SDL 无法隐藏光标时。
+- `SdlException` — SDL 无法隐藏光标时。
 
 ### isVisible
 

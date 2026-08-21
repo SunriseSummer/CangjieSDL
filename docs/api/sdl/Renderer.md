@@ -20,7 +20,7 @@ public class Renderer
 
 `Renderer` 由窗口持有，不单独关闭。关闭 [`SdlWindow`](SdlWindow.md#close) 时，会先释放渲染器内部的超采样目标、文本纹理缓存和几何缓冲，再销毁 SDL 渲染器；这一步可重复执行而不会重复释放资源。
 
-SDL 的失败状态会影响本次设置、查询、纹理绘制或像素读回时，`Renderer` 将其转换为 `CuiException`；明确说明为空操作或返回估算值的无头路径不调用 SDL。
+SDL 的失败状态会影响本次设置、查询、纹理绘制或像素读回时，`Renderer` 将其转换为 `SdlException`；明确说明为空操作或返回估算值的无头路径不调用 SDL。
 
 文本走独立的绘制通路：字形按有效像素尺寸（`pointSize` × 当前缩放）由 FreeType 栅格化，在对齐到物理像素的位置上 1:1 绘制——先按逻辑尺寸栅格化再被渲染缩放拉伸会让每个字形被重采样两次，明显发虚。旋转文本（[`textRotated`](#textrotated)）整串栅格化进纹理并跨帧缓存（键含文本/字号/样式/字体/缩放；颜色以颜色调制按次生效）。
 
@@ -180,7 +180,7 @@ public func setColor(color: Color): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝颜色更新时。
+- `SdlException` — SDL 拒绝颜色更新时。
 
 ### clear
 
@@ -196,7 +196,7 @@ public func clear(color: Color): Unit
 
 **异常**
 
-- `CuiException` — SDL 无法清空当前目标时。
+- `SdlException` — SDL 无法清空当前目标时。
 
 ### present
 
@@ -208,7 +208,7 @@ public func present(): Unit
 
 **异常**
 
-- `CuiException` — SDL 提交失败时。
+- `SdlException` — SDL 提交失败时。
 
 ### setScale
 
@@ -224,7 +224,7 @@ public func setScale(scale: Float32): Unit
 
 **异常**
 
-- `CuiException` — `scale` ≤ 0，或 SDL 拒绝缩放时。
+- `SdlException` — `scale` ≤ 0，或 SDL 拒绝缩放时。
 
 ### setVSync
 
@@ -240,7 +240,7 @@ public func setVSync(vsync: Int32): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### vsync
 
@@ -254,7 +254,7 @@ public func vsync(): Int32
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### setViewport
 
@@ -270,7 +270,7 @@ public func setViewport(rect: Rect): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### resetViewport
 
@@ -282,7 +282,7 @@ public func resetViewport(): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### viewport
 
@@ -296,7 +296,7 @@ public func viewport(): Rect
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### pushClip
 
@@ -340,7 +340,7 @@ public func clipRect(): Rect
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### clipEnabled
 
@@ -366,7 +366,7 @@ public func setColorScale(scale: Float32): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### colorScale
 
@@ -380,7 +380,7 @@ public func colorScale(): Float32
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### setColorFloat
 
@@ -396,7 +396,7 @@ public func setColorFloat(r: Float32, g: Float32, b: Float32, a: Float32): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### point
 
@@ -639,7 +639,7 @@ public func texturedStrip(texture: Texture, points: ArrayList<Point>, texPoints:
 
 **异常**
 
-- `CuiException` — 纹理已关闭时。
+- `SdlException` — 纹理已关闭时。
 
 ### text
 
@@ -728,7 +728,7 @@ public func textRotated(text: String, centerX: Float32, centerY: Float32, angleD
 
 **异常**
 
-- `CuiException` — SDL 旋转绘制失败时。
+- `SdlException` — SDL 旋转绘制失败时。
 
 ### textMeasureCount
 
@@ -792,7 +792,7 @@ public func captureBmp(path: String): Unit
 
 **异常**
 
-- `CuiException` — SDL 无法读取像素或保存文件时。
+- `SdlException` — SDL 无法读取像素或保存文件时。
 
 ## 扩展成员
 
@@ -812,7 +812,7 @@ public func textureFromSurface(surface: Surface): Texture
 
 **异常**
 
-- `CuiException` — 表面已关闭，或 SDL 无法创建纹理时（无头渲染器亦抛出）。
+- `SdlException` — 表面已关闭，或 SDL 无法创建纹理时（无头渲染器亦抛出）。
 
 ### loadTexture
 
@@ -830,7 +830,7 @@ public func loadTexture(path: String): Texture
 
 **异常**
 
-- `CuiException` — 图像无法加载或无法创建纹理时。
+- `SdlException` — 图像无法加载或无法创建纹理时。
 
 ### texture
 
@@ -848,7 +848,7 @@ public func texture(texture: Texture, destination: Rect, source!: ?Rect = None):
 
 **异常**
 
-- `CuiException` — 纹理已关闭，或 SDL 绘制失败时。
+- `SdlException` — 纹理已关闭，或 SDL 绘制失败时。
 
 ### textureRotated
 
@@ -867,7 +867,7 @@ public func textureRotated(texture: Texture, destination: Rect, angle: Float64, 
 
 **异常**
 
-- `CuiException` — 纹理已关闭，或 SDL 绘制失败时。
+- `SdlException` — 纹理已关闭，或 SDL 绘制失败时。
 
 ## 另请参阅
 

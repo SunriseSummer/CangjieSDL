@@ -77,7 +77,7 @@ println("delaySeconds=${seconds}")
 
 ## 如果没有成功
 
-动态库加载失败说明系统探针也跨越了原生边界，转到[部署](../how-to/deploy-native-runtime.md)检查 DLL。`preferencePath` 失败时确认组织名和应用名非空，并记录 `CuiException` 完整信息。CPU 或平台字段异常时先运行最小的 `platformName()` 探针，再逐项加回。电量未知不属于错误；台式机、虚拟机和部分驱动本来可能不报告。
+动态库加载失败说明系统探针也跨越了原生边界，转到[部署](../how-to/deploy-native-runtime.md)检查 DLL。`preferencePath` 失败时确认组织名和应用名非空，并记录 `SdlException` 完整信息。CPU 或平台字段异常时先运行最小的 `platformName()` 探针，再逐项加回。电量未知不属于错误；台式机、虚拟机和部分驱动本来可能不报告。
 
 ## 相关 API
 

@@ -4,7 +4,7 @@
 
 `sdl.input` 包中的 public class
 
-鼠标的轮询式查询与捕获控制。事件式的鼠标输入经 [`UiEvent`](../UiEvent.md) 到达；这里的 [`state`](#state) 适合每帧读取的即时状态（拖动、悬停跟踪）。SDL 拒绝更改鼠标捕获状态时，`capture` 把失败状态转换为 `CuiException`。
+鼠标的轮询式查询与捕获控制。事件式的鼠标输入经 [`UiEvent`](../UiEvent.md) 到达；这里的 [`state`](#state) 适合每帧读取的即时状态（拖动、悬停跟踪）。SDL 拒绝更改鼠标捕获状态时，`capture` 把失败状态转换为 `SdlException`。
 
 ## 声明
 
@@ -90,7 +90,7 @@ public static func capture(enabled: Bool): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝捕获时。
+- `SdlException` — SDL 拒绝捕获时。
 
 ## 另请参阅
 

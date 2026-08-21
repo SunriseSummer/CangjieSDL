@@ -2,7 +2,7 @@
 
 # 函数 — sdl.system
 
-`sdl.system` 包的包级函数。`openUrl` 在 SDL 无法把请求交给系统默认处理程序时，将失败状态转换为 `CuiException`。
+`sdl.system` 包的包级函数。`openUrl` 在 SDL 无法把请求交给系统默认处理程序时，将失败状态转换为 `SdlException`。
 
 ### platformName
 
@@ -48,4 +48,4 @@ public func openUrl(url: String): Unit
 
 **异常**
 
-- `CuiException` — SDL 无法发起打开请求时。
+- `SdlException` — SDL 无法发起打开请求时。

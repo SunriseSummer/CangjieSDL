@@ -1,6 +1,6 @@
 package sdl.system
 
-import sdl.{CuiException, ensureSdl}
+import sdl.{SdlException, ensureSdl}
 
 internal func hintPriorityCode(priority: HintPriority): Int32 {
     match (priority) {
@@ -27,12 +27,12 @@ internal func hintName(hint: SdlHint): String {
 }
 
 /**
- * Throws `CuiException` when a custom SDL hint name is empty.
+ * Throws `SdlException` when a custom SDL hint name is empty.
  */
 internal func checkedHintName(hint: SdlHint): String {
     let name = hintName(hint)
     if (name.size <= 0) {
-        throw CuiException("SDL hint name cannot be empty.")
+        throw SdlException("SDL hint name cannot be empty.")
     }
     name
 }
@@ -53,9 +53,7 @@ internal func withHintStrings(hint: SdlHint, value: String, priority: HintPriori
             SDL_SetHintWithPriority(cName, cValue, hintPriorityCode(priority))
         }, "SDL_SetHintWithPriority")
     } finally {
-        unsafe {
-            LibC.free(cName)
-            LibC.free(cValue)
-        }
+        unsafe { LibC.free(cName) }
+        unsafe { LibC.free(cValue) }
     }
 }

@@ -1,6 +1,6 @@
 package sdl.system
 
-import sdl.CuiException
+import sdl.SdlException
 
 @Test
 func hintPriorityCodesMapSdlValues(): Unit {
@@ -47,7 +47,7 @@ private func hintSetFails(hint: SdlHint): Bool {
     try {
         SdlHints.set(hint, "value")
         false
-    } catch (e: CuiException) {
+    } catch (e: SdlException) {
         true
     }
 }

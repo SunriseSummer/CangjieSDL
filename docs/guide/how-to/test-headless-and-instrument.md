@@ -23,7 +23,7 @@ renderer.pushClip(Rect(20.0, 20.0, 200.0, 80.0))
 renderer.text("缓存测试", 28.0, 36.0, Color.rgb(255, 255, 255))
 match (renderer.currentClip()) {
     case Some(rect) => println("clip=${rect.w}x${rect.h}")
-    case None => throw CuiException("裁剪栈为空")
+    case None => throw SdlException("裁剪栈为空")
 }
 renderer.popClip()
 renderer.endScene()
@@ -59,7 +59,7 @@ println("widths=${plain1},${plain2},${bold}")
 - [`Renderer`](../../api/sdl/Renderer.md)：headless、裁剪、查询和文字计数器。
 - [`Rect`](../../api/sdl/Rect.md)：纯布局与边界断言。
 - [`FontStyle`](../../api/sdl/FontStyle.md)：区分缓存键的样式。
-- [`CuiException`](../../api/sdl/CuiException.md)：自检失败的明确错误。
+- [`SdlException`](../../api/sdl/SdlException.md)：自检失败的明确错误。
 
 ## 下一步
 

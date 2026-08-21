@@ -2,6 +2,7 @@ package sdl.input
 
 import sdl.{ensureSdl, normalizedScale}
 
+/** A snapshot of the mouse: position plus decoded left/middle/right flags and the raw SDL button mask. */
 public struct MouseState {
     public let x: Float32
     public let y: Float32
@@ -20,7 +21,9 @@ public struct MouseState {
     }
 }
 
+/** Main-thread access to global mouse state and capture. */
 public class Mouse {
+    /** The current mouse position and button state; coordinates are divided by `scale` to yield logical pixels. */
     public static func state(scale!: Float32 = 1.0): MouseState {
         var x: Float32 = 0.0
         var y: Float32 = 0.0
@@ -36,6 +39,9 @@ public class Mouse {
         )
     }
 
+    /**
+     * Throws `SdlException` when SDL cannot change mouse capture for the focused window.
+     */
     public static func capture(enabled: Bool): Unit {
         ensureSdl(unsafe { SDL_CaptureMouse(enabled) }, "SDL_CaptureMouse")
     }

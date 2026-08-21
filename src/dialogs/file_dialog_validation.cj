@@ -1,14 +1,14 @@
 package sdl.dialogs
 
-import sdl.{CuiException}
+import sdl.{SdlException}
 
 /**
- * Throws `CuiException` when file dialog options cannot be safely passed to SDL.
+ * Throws `SdlException` when file dialog options cannot be safely passed to SDL.
  */
 internal func ensureFileDialogOptions(options: FileDialogOptions): Unit {
     let count = options.filters.size
     if (count > FILE_DIALOG_MAX_FILTERS) {
-        throw CuiException("File dialog supports at most ${FILE_DIALOG_MAX_FILTERS} filters.")
+        throw SdlException("File dialog supports at most ${FILE_DIALOG_MAX_FILTERS} filters.")
     }
     for (filter in options.filters) {
         ensureFileDialogFilter(filter)
@@ -41,14 +41,14 @@ internal func isValidDialogFilterPattern(pattern: String): Bool {
 }
 
 /**
- * Throws `CuiException` when a filter name is empty or its extension pattern is invalid.
+ * Throws `SdlException` when a filter name is empty or its extension pattern is invalid.
  */
 private func ensureFileDialogFilter(filter: FileDialogFilter): Unit {
     if (filter.name.size <= 0) {
-        throw CuiException("File dialog filter name cannot be empty.")
+        throw SdlException("File dialog filter name cannot be empty.")
     }
     if (!isValidDialogFilterPattern(filter.pattern)) {
-        throw CuiException("File dialog filter pattern is invalid.")
+        throw SdlException("File dialog filter pattern is invalid.")
     }
 }
 

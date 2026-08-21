@@ -4,7 +4,7 @@
 
 `sdl` 包中的 public class
 
-与自己的[渲染器](Renderer.md)成对创建、成对关闭的 SDL 窗口。`width`/`height` 与全部事件、绘制坐标都是逻辑像素，`scale` 把它们映射到窗口像素。构造函数初始化视频子系统并开启文本输入，失败抛 `CuiException`；[`close`](#close) 幂等，释放渲染器、窗口与一个视频子系统引用——SDL3 对子系统初始化计数，关掉一个窗口不会拆掉另一个仍开着的窗口的子系统。除明确以空值或布尔值表示状态的查询外，SDL 拒绝窗口设置或无法完成带错误状态的查询时，方法会把失败状态转换为 `CuiException`。
+与自己的[渲染器](Renderer.md)成对创建、成对关闭的 SDL 窗口。`width`/`height` 与全部事件、绘制坐标都是逻辑像素，`scale` 把它们映射到窗口像素。构造函数初始化视频子系统并开启文本输入，失败抛 `SdlException`；[`close`](#close) 幂等，释放渲染器、窗口与一个视频子系统引用——SDL3 对子系统初始化计数，关掉一个窗口不会拆掉另一个仍开着的窗口的子系统。除明确以空值或布尔值表示状态的查询外，SDL 拒绝窗口设置或无法完成带错误状态的查询时，方法会把失败状态转换为 `SdlException`。
 
 ## 声明
 
@@ -140,7 +140,7 @@ public init(spec: WindowSpec)
 
 **异常**
 
-- `CuiException` — SDL 无法创建或初始化窗口、渲染器或文本输入时。
+- `SdlException` — SDL 无法创建或初始化窗口、渲染器或文本输入时。
 
 ## 字段
 
@@ -192,7 +192,7 @@ public func setTitle(title: String): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### setSize
 
@@ -208,7 +208,7 @@ public func setSize(width: Int32, height: Int32): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝调整时。
+- `SdlException` — SDL 拒绝调整时。
 
 ### refreshSize
 
@@ -222,7 +222,7 @@ public func refreshSize(): Size
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### setTextInputArea
 
@@ -238,7 +238,7 @@ public func setTextInputArea(rect: Rect): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### pollEvent
 
@@ -306,7 +306,7 @@ public func setPosition(x: Int32, y: Int32): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝移动时。
+- `SdlException` — SDL 拒绝移动时。
 
 ### position
 
@@ -320,7 +320,7 @@ public func position(): WindowPosition
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### setMinimumSize
 
@@ -336,7 +336,7 @@ public func setMinimumSize(width: Int32, height: Int32): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### setMaximumSize
 
@@ -352,7 +352,7 @@ public func setMaximumSize(width: Int32, height: Int32): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### setBordered
 
@@ -368,7 +368,7 @@ public func setBordered(bordered: Bool): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### setResizable
 
@@ -384,7 +384,7 @@ public func setResizable(resizable: Bool): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### setAlwaysOnTop
 
@@ -400,7 +400,7 @@ public func setAlwaysOnTop(onTop: Bool): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### setOpacity
 
@@ -416,7 +416,7 @@ public func setOpacity(opacity: Float32): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### show
 
@@ -428,7 +428,7 @@ public func show(): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝操作时。
+- `SdlException` — SDL 拒绝操作时。
 
 ### hide
 
@@ -440,7 +440,7 @@ public func hide(): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝操作时。
+- `SdlException` — SDL 拒绝操作时。
 
 ### raiseWindow
 
@@ -452,7 +452,7 @@ public func raiseWindow(): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝操作时。
+- `SdlException` — SDL 拒绝操作时。
 
 ### maximize
 
@@ -464,7 +464,7 @@ public func maximize(): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝操作时。
+- `SdlException` — SDL 拒绝操作时。
 
 ### minimize
 
@@ -476,7 +476,7 @@ public func minimize(): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝操作时。
+- `SdlException` — SDL 拒绝操作时。
 
 ### restore
 
@@ -488,7 +488,7 @@ public func restore(): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝操作时。
+- `SdlException` — SDL 拒绝操作时。
 
 ### setFullscreen
 
@@ -504,7 +504,7 @@ public func setFullscreen(fullscreen: Bool): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝切换时。
+- `SdlException` — SDL 拒绝切换时。
 
 ### sync
 
@@ -516,7 +516,7 @@ public func sync(): Unit
 
 **异常**
 
-- `CuiException` — SDL 同步失败时。
+- `SdlException` — SDL 同步失败时。
 
 ### flash
 
@@ -532,7 +532,7 @@ public func flash(operation!: WindowFlash = WindowFlash.Briefly): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝操作时。
+- `SdlException` — SDL 拒绝操作时。
 
 ### setRelativeMouseMode
 
@@ -548,7 +548,7 @@ public func setRelativeMouseMode(enabled: Bool): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝切换时。
+- `SdlException` — SDL 拒绝切换时。
 
 ### title
 
@@ -582,7 +582,7 @@ public func sizeInPixels(): Size
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### safeArea
 
@@ -596,7 +596,7 @@ public func safeArea(): Rect
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### minimumSize
 
@@ -610,7 +610,7 @@ public func minimumSize(): Size
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### maximumSize
 
@@ -624,7 +624,7 @@ public func maximumSize(): Size
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### borderSize
 
@@ -638,7 +638,7 @@ public func borderSize(): WindowBorderSize
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### setAspectRatio
 
@@ -655,7 +655,7 @@ public func setAspectRatio(minimum: Float32, maximum: Float32): Unit
 
 **异常**
 
-- `CuiException` — 任一值为负、`minimum` 超过 `maximum`（两者皆为正时），或 SDL 拒绝设置时。
+- `SdlException` — 任一值为负、`minimum` 超过 `maximum`（两者皆为正时），或 SDL 拒绝设置时。
 
 ### aspectRatio
 
@@ -669,7 +669,7 @@ public func aspectRatio(): WindowAspectRatio
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### opacity
 
@@ -683,7 +683,7 @@ public func opacity(): Float32
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ### pixelDensity
 
@@ -697,7 +697,7 @@ public func pixelDensity(): Float32
 
 **异常**
 
-- `CuiException` — SDL 报告非正值时。
+- `SdlException` — SDL 报告非正值时。
 
 ### displayScale
 
@@ -711,7 +711,7 @@ public func displayScale(): Float32
 
 **异常**
 
-- `CuiException` — SDL 报告非正值时。
+- `SdlException` — SDL 报告非正值时。
 
 ### setFillDocument
 
@@ -727,7 +727,7 @@ public func setFillDocument(fill: Bool): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### setKeyboardGrab
 
@@ -743,7 +743,7 @@ public func setKeyboardGrab(grabbed: Bool): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### setMouseGrab
 
@@ -759,7 +759,7 @@ public func setMouseGrab(grabbed: Bool): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### keyboardGrabbed
 
@@ -795,7 +795,7 @@ public func setMouseGrabRect(rect: ?Rect): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### mouseGrabRect
 
@@ -821,7 +821,7 @@ public func setFocusable(focusable: Bool): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### showSystemMenu
 
@@ -837,7 +837,7 @@ public func showSystemMenu(x: Int32, y: Int32): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝操作时。
+- `SdlException` — SDL 拒绝操作时。
 
 ### setProgressState
 
@@ -853,7 +853,7 @@ public func setProgressState(state: WindowProgressState): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### progressState
 
@@ -867,7 +867,7 @@ public func progressState(): WindowProgressState
 
 **异常**
 
-- `CuiException` — SDL 返回无效状态时。
+- `SdlException` — SDL 返回无效状态时。
 
 ### setProgressValue
 
@@ -883,7 +883,7 @@ public func setProgressValue(value: Float32): Unit
 
 **异常**
 
-- `CuiException` — SDL 拒绝设置时。
+- `SdlException` — SDL 拒绝设置时。
 
 ### progressValue
 
@@ -897,7 +897,7 @@ public func progressValue(): Float32
 
 **异常**
 
-- `CuiException` — SDL 查询失败时。
+- `SdlException` — SDL 查询失败时。
 
 ## 另请参阅
 

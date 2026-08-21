@@ -4,7 +4,7 @@
 
 `sdl.system` 包中的 public class
 
-应用相关目录的查询入口：可执行文件所在目录、当前目录、按组织/应用名生成的首选项目录，以及标准用户目录。返回 `String` 的 `currentDirectory` / `preferencePath` 在 SDL 无法解析目录时抛出 `CuiException`；返回 `?String` 的 `basePath` / `userFolder` 以 `None` 表示不可用。
+应用相关目录的查询入口：可执行文件所在目录、当前目录、按组织/应用名生成的首选项目录，以及标准用户目录。返回 `String` 的 `currentDirectory` / `preferencePath` 在 SDL 无法解析目录时抛出 `SdlException`；返回 `?String` 的 `basePath` / `userFolder` 以 `None` 表示不可用。
 
 ## 声明
 
@@ -85,7 +85,7 @@ public static func currentDirectory(): String
 
 **异常**
 
-- `CuiException` — SDL 无法解析当前目录时。
+- `SdlException` — SDL 无法解析当前目录时。
 
 ### preferencePath
 
@@ -104,7 +104,7 @@ public static func preferencePath(org: String, app: String): String
 
 **异常**
 
-- `CuiException` — 组织或应用名为空，或 SDL 无法创建目录时。
+- `SdlException` — 组织或应用名为空，或 SDL 无法创建目录时。
 
 ### userFolder
 

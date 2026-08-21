@@ -2,6 +2,10 @@ package sdl.dialogs
 
 import std.sync.Mutex
 
+/**
+ * The observed state of an asynchronous file dialog: still pending, canceled by the user,
+ * completed with selected paths (plus the chosen filter index, when available), or failed with an error message.
+ */
 public enum FileDialogResult {
     | FileDialogPending
     | FileDialogCanceled
@@ -9,6 +13,7 @@ public enum FileDialogResult {
     | FileDialogFailed(String)
 }
 
+/** A single dialog filter entry: a display name plus a semicolon-separated extension pattern (e.g. "png;jpg"). */
 public struct FileDialogFilter {
     public let name: String
     public let pattern: String
@@ -19,6 +24,7 @@ public struct FileDialogFilter {
     }
 }
 
+/** Configuration for a file dialog: filter list, starting location, and whether multiple selection is allowed. */
 public struct FileDialogOptions {
     public var filters: Array<FileDialogFilter>
     public var defaultLocation: ?String
@@ -35,6 +41,10 @@ public struct FileDialogOptions {
     }
 }
 
+/**
+ * A handle to an in-flight native file dialog; poll `result()` or `isDone()` each frame
+ * until the dialog callback delivers its outcome.
+ */
 public class FileDialogRequest {
     private let lock = Mutex()
     private var current = FileDialogResult.FileDialogPending
@@ -46,6 +56,7 @@ public class FileDialogRequest {
         this.nativeResources = Some(nativeResources)
     }
 
+    /** The current outcome of the dialog; `FileDialogPending` until the user finishes or cancels. */
     public func result(): FileDialogResult {
         var value = FileDialogResult.FileDialogPending
         synchronized(lock) {
@@ -54,6 +65,7 @@ public class FileDialogRequest {
         value
     }
 
+    /** Whether the dialog has finished, i.e. `result()` is no longer `FileDialogPending`. */
     public func isDone(): Bool {
         match (result()) {
             case FileDialogResult.FileDialogPending => false

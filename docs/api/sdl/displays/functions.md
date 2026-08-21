@@ -2,7 +2,7 @@
 
 # 函数 — sdl.displays
 
-`sdl.displays` 包的包级函数。`primaryDisplayInfo`、`displayIds` 与经后者实现的 `allDisplayInfos` 会按需初始化视频子系统；其他查询不会调用 `SDL_Init`，须先创建窗口或调用上述入口。除 `closestFullscreenDisplayMode` 明确以 `None` 表示 SDL 的失败结果外，其余带失败状态的 SDL 查询会转换为 `CuiException`。
+`sdl.displays` 包的包级函数。`primaryDisplayInfo`、`displayIds` 与经后者实现的 `allDisplayInfos` 会按需初始化视频子系统；其他查询不会调用 `SDL_Init`，须先创建窗口或调用上述入口。除 `closestFullscreenDisplayMode` 明确以 `None` 表示 SDL 的失败结果外，其余带失败状态的 SDL 查询会转换为 `SdlException`。
 
 ### primaryDisplayInfo
 
@@ -16,7 +16,7 @@ public func primaryDisplayInfo(): DisplayInfo
 
 **异常**
 
-- `CuiException` — SDL 无法初始化视频或查询主显示器时。
+- `SdlException` — SDL 无法初始化视频或查询主显示器时。
 
 ### displayInfo
 
@@ -36,7 +36,7 @@ public func displayInfo(id: UInt32): DisplayInfo
 
 **异常**
 
-- `CuiException` — 编号为零，或 SDL 无法查询该显示器时。
+- `SdlException` — 编号为零，或 SDL 无法查询该显示器时。
 
 ### displayIds
 
@@ -50,7 +50,7 @@ public func displayIds(): Array<UInt32>
 
 **异常**
 
-- `CuiException` — SDL 无法枚举显示器时。
+- `SdlException` — SDL 无法枚举显示器时。
 
 ### allDisplayInfos
 
@@ -64,7 +64,7 @@ public func allDisplayInfos(): Array<DisplayInfo>
 
 **异常**
 
-- `CuiException` — SDL 无法查询其中任何一台显示器时。
+- `SdlException` — SDL 无法查询其中任何一台显示器时。
 
 ### fullscreenDisplayModes
 
@@ -84,7 +84,7 @@ public func fullscreenDisplayModes(id: UInt32): Array<DisplayMode>
 
 **异常**
 
-- `CuiException` — 编号为零，或 SDL 无法枚举模式时。
+- `SdlException` — 编号为零，或 SDL 无法枚举模式时。
 
 ### closestFullscreenDisplayMode
 
@@ -105,7 +105,7 @@ public func closestFullscreenDisplayMode(id: UInt32, request: FullscreenModeRequ
 
 **异常**
 
-- `CuiException` — 编号为零时。
+- `SdlException` — 编号为零时。
 
 ### displayInfoForPoint
 
@@ -125,7 +125,7 @@ public func displayInfoForPoint(point: Point): DisplayInfo
 
 **异常**
 
-- `CuiException` — SDL 无法定位或查询显示器时。
+- `SdlException` — SDL 无法定位或查询显示器时。
 
 ### displayInfoForRect
 
@@ -145,4 +145,4 @@ public func displayInfoForRect(rect: Rect): DisplayInfo
 
 **异常**
 
-- `CuiException` — SDL 无法定位或查询显示器时。
+- `SdlException` — SDL 无法定位或查询显示器时。

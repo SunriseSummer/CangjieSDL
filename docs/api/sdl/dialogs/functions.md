@@ -2,7 +2,7 @@
 
 # 函数 — sdl.dialogs
 
-`sdl.dialogs` 包的包级函数。两者都是同步调用：消息框关闭后才返回。SDL 无法创建或显示消息框时，函数把失败状态转换为 `CuiException`。
+`sdl.dialogs` 包的包级函数。两者都是同步调用：消息框关闭后才返回。SDL 无法创建或显示消息框时，函数把失败状态转换为 `SdlException`。
 
 ### showSimpleMessageBox
 
@@ -21,7 +21,7 @@ public func showSimpleMessageBox(title: String, message: String, kind!: MessageB
 
 **异常**
 
-- `CuiException` — SDL 无法显示原生消息框时。
+- `SdlException` — SDL 无法显示原生消息框时。
 
 ### showMessageBox
 
@@ -40,4 +40,4 @@ public func showMessageBox(options: MessageBoxOptions, window!: ?SdlWindow = Non
 
 **异常**
 
-- `CuiException` — 选项非法（如按钮列表为空），或 SDL 无法显示消息框时。
+- `SdlException` — 选项非法（如按钮列表为空），或 SDL 无法显示消息框时。

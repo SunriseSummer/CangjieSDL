@@ -3,7 +3,7 @@ package sdl
 // SDL subsystem init is ref-counted; window teardown must quit its own reference only.
 // A full SDL_Quit() on the first close used to destroy every remaining window and renderer.
 @Test
-func closingOneWindowKeepsAnotherAlive(): Unit {
+func closingOneWindowKeepsAnotherAlive(): Unit { // cjcheck-ignore: smoke-test # the assertion is surviving the second window's close without a native crash; liveness is not observable from Cangjie
     let first = SdlWindow(WindowSpec("Lifecycle first", 160, 120))
     let second = SdlWindow(WindowSpec("Lifecycle second", 160, 120))
     try {

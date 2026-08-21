@@ -54,7 +54,7 @@ if (FileSystem.exists(config)) {
 }
 writeSettings(config, settings)
 if (!FileSystem.exists(config)) {
-    throw CuiException("配置写入后不存在")
+    throw SdlException("配置写入后不存在")
 }
 ```
 

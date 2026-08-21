@@ -1,15 +1,15 @@
-[sdl](../index.md) › [sdl](index.md) › CuiException
+[sdl](../index.md) › [sdl](index.md) › SdlException
 
-# CuiException
+# SdlException
 
 `sdl` 包中的 public class
 
-SDL 调用失败、参数非法或资源已关闭时，本模块会抛出 `CuiException`。异常消息说明失败的操作；SDL 调用失败时还会附带 `SDL_GetError` 返回的错误文本。
+SDL 调用失败、参数非法或资源已关闭时，本模块会抛出 `SdlException`。异常消息说明失败的操作；SDL 调用失败时还会附带 `SDL_GetError` 返回的错误文本。
 
 ## 声明
 
 ```cangjie
-public class CuiException <: Exception
+public class SdlException <: Exception
 ```
 
 ## 继承
@@ -21,13 +21,13 @@ public class CuiException <: Exception
 ```cangjie verify
 package docexample
 
-import sdl.{CuiException, Renderer}
+import sdl.{SdlException, Renderer}
 
 main(): Unit {
     let r = Renderer.headless()
     try {
         r.setScale(0.0) // 非法缩放比例
-    } catch (e: CuiException) {
+    } catch (e: SdlException) {
         println("捕获：${e.message}")
     }
     // 输出: 捕获：Renderer scale must be greater than 0.

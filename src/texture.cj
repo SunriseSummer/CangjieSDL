@@ -1,5 +1,9 @@
 package sdl
 
+/**
+ * How a texture's pixels combine with the render target (mapped to SDL_BLENDMODE_*): no blending,
+ * alpha blend, additive, color modulate, or multiply.
+ */
 public enum TextureBlendMode {
     | None
     | Blend
@@ -8,6 +12,7 @@ public enum TextureBlendMode {
     | Mul
 }
 
+/** Which axes a texture is mirrored across when rendered (mapped to SDL_FLIP_*). */
 public enum TextureFlip {
     | None
     | Horizontal
@@ -15,6 +20,11 @@ public enum TextureFlip {
     | Both
 }
 
+/**
+ * Optional settings for a rotated texture draw: a source sub-rectangle (in texture pixels,
+ * defaulting to the whole texture), a rotation pivot (defaulting to the destination center),
+ * and a mirror flip.
+ */
 public struct TextureRenderOptions {
     public let source: ?Rect
     public let center: ?Point
@@ -27,6 +37,12 @@ public struct TextureRenderOptions {
     }
 }
 
+/**
+ * A GPU-resident image wrapping an SDL_Texture, created from a `Surface` or an image file via the
+ * renderer and drawn with `Renderer.texture`/`textureRotated`. `width`/`height` are the pixel size
+ * captured at creation. Close it to free the GPU memory; reusing a closed texture throws
+ * `SdlException`.
+ */
 public class Texture <: Resource {
     internal let ptr: CPointer<Unit>
     private var closed = false
@@ -43,68 +59,82 @@ public class Texture <: Resource {
         this.height = h
     }
 
+    /** The texture's pixel dimensions as a `Size`. */
     public func size(): Size {
         Size(width, height)
     }
 
+    /**
+     * Sets the color multiplied into every drawn pixel (SDL_SetTextureColorMod); the alpha
+     * channel is ignored — use `setAlpha`. Throws `SdlException` when the texture is closed
+     * or SDL rejects the mod.
+     */
     public func setColorMod(color: Color): Unit {
         ensureOpen()
         ensureSdl(unsafe { SDL_SetTextureColorMod(ptr, color.r, color.g, color.b) }, "SDL_SetTextureColorMod")
     }
 
+    /**
+     * Sets the texture's opacity as a 0-255 value, clamped (SDL_SetTextureAlphaMod).
+     * Throws `SdlException` when the texture is closed or SDL rejects the mod.
+     */
     public func setAlpha(alpha: Int64): Unit {
         ensureOpen()
         ensureSdl(unsafe { SDL_SetTextureAlphaMod(ptr, toChannel(alpha)) }, "SDL_SetTextureAlphaMod")
     }
 
+    /**
+     * Sets how the texture blends onto the render target (SDL_SetTextureBlendMode).
+     * Throws `SdlException` when the texture is closed or SDL rejects the mode.
+     */
     public func setBlendMode(mode: TextureBlendMode): Unit {
         ensureOpen()
         ensureSdl(unsafe { SDL_SetTextureBlendMode(ptr, blendModeCode(mode)) }, "SDL_SetTextureBlendMode")
     }
 
+    /** Whether `close` has already been called; a closed texture throws on reuse. */
     public func isClosed(): Bool {
         closed
     }
 
+    /** Frees the GPU texture (SDL_DestroyTexture); safe to call more than once. */
     public func close(): Unit {
         if (closed) {
             return
         }
         closed = true
-        unsafe {
-            if (ptr.isNotNull()) {
-                SDL_DestroyTexture(ptr)
-            }
+        if (ptr.isNotNull()) {
+            unsafe { SDL_DestroyTexture(ptr) }
         }
     }
 
     /**
-     * Throws `CuiException` when a closed texture is reused.
+     * Throws `SdlException` when a closed texture is reused.
      */
     private func ensureOpen(): Unit {
         if (closed) {
-            throw CuiException("Texture is already closed.")
+            throw SdlException("Texture is already closed.")
         }
     }
 }
 
 extend Renderer {
     /**
-     * Throws `CuiException` when the source surface is closed or SDL cannot create a texture.
+     * Throws `SdlException` when the source surface is closed or SDL cannot create a texture.
      */
     public func textureFromSurface(surface: Surface): Texture {
         if (surface.isClosed()) {
-            throw CuiException("Cannot create texture from a closed surface.")
+            throw SdlException("Cannot create texture from a closed surface.")
         }
         let texture = unsafe { SDL_CreateTextureFromSurface(ptr, surface.ptr) }
         if (texture.isNull()) {
-            throw CuiException("SDL_CreateTextureFromSurface failed: ${lastSdlError()}")
+            throw SdlException("SDL_CreateTextureFromSurface failed: ${lastSdlError()}")
         }
         Texture(texture)
     }
 
     /**
-     * Throws `CuiException` when SDL cannot load the image or create a texture from it.
+     * Throws `SdlException` when SDL cannot load the image or create a texture from it.
      */
     public func loadTexture(path: String): Texture {
         var texture = CPointer<Unit>()
@@ -112,17 +142,17 @@ extend Renderer {
             texture = unsafe { SDL_CreateTextureFromSurface(ptr, surface.ptr) }
         }
         if (texture.isNull()) {
-            throw CuiException("SDL_CreateTextureFromSurface failed: ${lastSdlError()}")
+            throw SdlException("SDL_CreateTextureFromSurface failed: ${lastSdlError()}")
         }
         Texture(texture)
     }
 
     /**
-     * Throws `CuiException` when the texture is closed or SDL cannot render it.
+     * Throws `SdlException` when the texture is closed or SDL cannot render it.
      */
     public func texture(texture: Texture, destination: Rect, source!: ?Rect = None): Unit {
         if (texture.isClosed()) {
-            throw CuiException("Cannot render a closed texture.")
+            throw SdlException("Cannot render a closed texture.")
         }
         var dst = destination.toSdlFRect()
         match (source) {
@@ -135,7 +165,7 @@ extend Renderer {
     }
 
     /**
-     * Throws `CuiException` when the texture is closed or SDL cannot render it.
+     * Throws `SdlException` when the texture is closed or SDL cannot render it.
      */
     public func textureRotated(
         texture: Texture,
@@ -144,7 +174,7 @@ extend Renderer {
         options!: TextureRenderOptions = TextureRenderOptions()
     ): Unit {
         if (texture.isClosed()) {
-            throw CuiException("Cannot render a closed texture.")
+            throw SdlException("Cannot render a closed texture.")
         }
         var dst = destination.toSdlFRect()
         match ((options.source, options.center)) {

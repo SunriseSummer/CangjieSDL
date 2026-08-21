@@ -2,6 +2,7 @@ package sdl
 
 private let ICON_GRID: Float32 = 24.0
 
+/** The built-in vector icons `drawIcon` can render. */
 public enum IconName {
     | NewDocument
     | OpenFolder

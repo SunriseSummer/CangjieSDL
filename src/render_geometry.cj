@@ -4,6 +4,47 @@ import std.collection.ArrayList
 import std.math.cos
 import std.math.sin
 import std.math.sqrt
+import sdl.text.GenerationCache
+
+/*
+ * A linear gradient prepared for per-vertex tinting: the start/end colour channels
+ * normalised to 0..1 floats once, plus the axis the gradient runs along.
+ */
+struct GradientSpec {
+    let vertical: Bool
+    let sr: Float32
+    let sg: Float32
+    let sb: Float32
+    let sa: Float32
+    let er: Float32
+    let eg: Float32
+    let eb: Float32
+    let ea: Float32
+
+    init(start: Color, end: Color, vertical!: Bool) {
+        this.vertical = vertical
+        this.sr = Float32(Int64(start.r)) / 255.0
+        this.sg = Float32(Int64(start.g)) / 255.0
+        this.sb = Float32(Int64(start.b)) / 255.0
+        this.sa = Float32(Int64(start.a)) / 255.0
+        this.er = Float32(Int64(end.r)) / 255.0
+        this.eg = Float32(Int64(end.g)) / 255.0
+        this.eb = Float32(Int64(end.b)) / 255.0
+        this.ea = Float32(Int64(end.a)) / 255.0
+    }
+}
+
+// The dash pen carried across polyline edges: whether ink is down and how much of the
+// current dash or gap run remains.
+struct DashState {
+    let penDown: Bool
+    let remaining: Float32
+
+    init(penDown!: Bool, remaining!: Float32) {
+        this.penDown = penDown
+        this.remaining = remaining
+    }
+}
 
 /*
  * GPU mesh painter with analytic anti-aliasing.
@@ -53,7 +94,8 @@ internal class GeometryBatch {
     // scrolling panel keeps the same shape and only changes position, so its mesh is built once and
     // thereafter merely translated and coloured — turning per-frame arc/normal tessellation (the CPU
     // cost that dominates a content page) into a cheap vertex copy.
-    private let meshCache = MeshCache(MESH_CACHE_CAP) {mesh => mesh.free()}
+    // The shared two-generation cache (see GenerationCache) keyed by the packed shape key.
+    private let meshCache = GenerationCache<Int64, CachedMesh>(MESH_CACHE_CAP) {mesh => mesh.free()}
 
     func fillRoundedRect(renderer: CPointer<Unit>, rect: Rect, radius: Float32, color: Color): Unit {
         fillRoundedRectSoft(renderer, rect, radius, color, AA_FEATHER)
@@ -127,7 +169,8 @@ internal class GeometryBatch {
                     meshCache.put(key, built)
                     built
             }
-            emitMeshGradient(renderer, mesh, rect.x, rect.y, extent, vertical, start, end)
+            emitMeshGradient(renderer, mesh, rect.x, rect.y, extent,
+                gradient: GradientSpec(start, end, vertical: vertical))
         } else {
             buildRoundedRectPath(rect, radius)
             fillPath(renderer, start, f)
@@ -215,40 +258,58 @@ internal class GeometryBatch {
             c += 1
         }
         // March the dash pattern around the closed polyline, carrying the on/off remainder across edges.
-        var penDown = true
-        var remaining = dash
+        var state = DashState(penDown: true, remaining: dash)
         var i = 0
         while (i < n) {
-            let ax = px[i]
-            let ay = py[i]
             let j = (i + 1) % n
-            let dx = px[j] - ax
-            let dy = py[j] - ay
-            let edgeLen = sqrt(dx * dx + dy * dy)
-            if (edgeLen > 0.0001) {
-                var t0: Float32 = 0.0
-                while (t0 < edgeLen) {
-                    let seg = min(remaining, edgeLen - t0)
-                    if (penDown && seg > 0.0) {
-                        let s0 = t0 / edgeLen
-                        let s1 = (t0 + seg) / edgeLen
-                        strokeSegment(renderer, Point(ax + dx * s0, ay + dy * s0), Point(ax + dx * s1, ay + dy * s1),
-                            pen)
-                    }
-                    t0 += seg
-                    remaining -= seg
-                    if (remaining <= 0.0001) {
-                        penDown = !penDown
-                        remaining = if (penDown) {
-                            dash
-                        } else {
-                            gap
-                        }
-                    }
-                }
-            }
+            state = marchDashedEdge(renderer, Point(px[i], py[i]), Point(px[j], py[j]), pen, dash: dash, gap: gap,
+                state: state)
             i += 1
         }
+    }
+
+    /*
+     * Draws the dashed portions of one polyline edge and returns the pen state carried into the
+     * next edge, so the dash rhythm continues around corners instead of restarting per edge.
+     */
+    private func marchDashedEdge(
+        renderer: CPointer<Unit>,
+        from: Point,
+        to: Point,
+        pen: Pen,
+        dash!: Float32,
+        gap!: Float32,
+        state!: DashState
+    ): DashState {
+        let dx = to.x - from.x
+        let dy = to.y - from.y
+        let edgeLen = sqrt(dx * dx + dy * dy)
+        if (edgeLen <= 0.0001) {
+            return state
+        }
+        var penDown = state.penDown
+        var remaining = state.remaining
+        var t0: Float32 = 0.0
+        while (t0 < edgeLen) {
+            let seg = min(remaining, edgeLen - t0)
+            if (penDown && seg > 0.0) {
+                let s0 = t0 / edgeLen
+                let s1 = (t0 + seg) / edgeLen
+                strokeSegment(renderer, Point(from.x + dx * s0, from.y + dy * s0), Point(from.x + dx * s1,
+                    from.y + dy * s1), pen)
+            }
+            t0 += seg
+            remaining -= seg
+            if (remaining <= 0.0001) {
+                penDown = !penDown
+                remaining = if (penDown) {
+                    dash
+                } else {
+                    gap
+                }
+            }
+        }
+        DashState(penDown: penDown, remaining: remaining)
     }
 
     func fillCircle(renderer: CPointer<Unit>, center: Point, radius: Float32, color: Color): Unit {
@@ -400,7 +461,7 @@ internal class GeometryBatch {
      * reallocates on next use, so this is called when the owning renderer shuts down.
      */
     func dispose(): Unit {
-        meshCache.freeAll()
+        meshCache.clear()
         if (verts.isNotNull()) {
             unsafe { LibC.free(verts) }
             verts = CPointer<SdlVertex>()
@@ -664,7 +725,7 @@ internal class GeometryBatch {
             unsafe { verts.write(i, vertex) }
             i += 1
         }
-        let _ = unsafe {
+        let _ = unsafe { // cjcheck-ignore: ignore-result # per-frame draw call: dropping one primitive beats aborting the frame; SDL keeps the error for diagnosis
             SDL_RenderGeometry(renderer, CPointer<Unit>(), verts, Int32(vc), mesh.indices, Int32(ic))
         }
     }
@@ -679,9 +740,7 @@ internal class GeometryBatch {
         dx: Float32,
         dy: Float32,
         extent: Float32,
-        vertical: Bool,
-        start: Color,
-        end: Color
+        gradient!: GradientSpec
     ): Unit {
         let vc = mesh.vertCount
         let ic = mesh.idxCount
@@ -692,43 +751,45 @@ internal class GeometryBatch {
         if (verts.isNull()) {
             return
         }
-        let sr = Float32(Int64(start.r)) / 255.0
-        let sg = Float32(Int64(start.g)) / 255.0
-        let sb = Float32(Int64(start.b)) / 255.0
-        let sa = Float32(Int64(start.a)) / 255.0
-        let er = Float32(Int64(end.r)) / 255.0
-        let eg = Float32(Int64(end.g)) / 255.0
-        let eb = Float32(Int64(end.b)) / 255.0
-        let ea = Float32(Int64(end.a)) / 255.0
         let span = max(0.0001, extent)
         var i: Int64 = 0
         while (i < vc) {
             var vertex = unsafe { mesh.relVerts.read(i) }
-            // Local position along the gradient axis, read before translation, normalised to 0..1.
-            let axis = if (vertical) {
-                vertex.py
-            } else {
-                vertex.px
-            }
-            var t = axis / span
-            if (t < 0.0) {
-                t = 0.0
-            } else if (t > 1.0) {
-                t = 1.0
-            }
-            vertex.px = vertex.px + dx
-            vertex.py = vertex.py + dy
-            // Fold the mesh's feather coverage (stored in colA) into the interpolated alpha.
-            vertex.colA = (sa + (ea - sa) * t) * vertex.colA
-            vertex.colR = sr + (er - sr) * t
-            vertex.colG = sg + (eg - sg) * t
-            vertex.colB = sb + (eb - sb) * t
+            vertex = gradientTintedVertex(vertex, gradient, span, dx, dy)
             unsafe { verts.write(i, vertex) }
             i += 1
         }
-        let _ = unsafe {
+        let _ = unsafe { // cjcheck-ignore: ignore-result # per-frame draw call: dropping one primitive beats aborting the frame; SDL keeps the error for diagnosis
             SDL_RenderGeometry(renderer, CPointer<Unit>(), verts, Int32(vc), mesh.indices, Int32(ic))
         }
+    }
+
+    /*
+     * Translates one cached vertex by (dx, dy) and colours it by its pre-translation position
+     * along the gradient axis (0 at the start edge, 1 at `span`), folding the mesh's feather
+     * coverage (stored in colA) into the interpolated alpha.
+     */
+    private func gradientTintedVertex(
+        source: SdlVertex,
+        gradient: GradientSpec,
+        span: Float32,
+        dx: Float32,
+        dy: Float32
+    ): SdlVertex {
+        var vertex = source
+        let axis = if (gradient.vertical) {
+            vertex.py
+        } else {
+            vertex.px
+        }
+        let t = clampF32(axis / span, 0.0, 1.0)
+        vertex.px = vertex.px + dx
+        vertex.py = vertex.py + dy
+        vertex.colA = (gradient.sa + (gradient.ea - gradient.sa) * t) * vertex.colA
+        vertex.colR = gradient.sr + (gradient.er - gradient.sr) * t
+        vertex.colG = gradient.sg + (gradient.eg - gradient.sg) * t
+        vertex.colB = gradient.sb + (gradient.eb - gradient.sb) * t
+        vertex
     }
 
     private func addTri(indices: ArrayList<Int32>, a: Int64, b: Int64, c: Int64): Unit {
@@ -997,7 +1058,9 @@ internal class GeometryBatch {
         if (idxCount + 3 > idxCap) {
             return
         }
-        unsafe {
+        // Three writes into the same freshly bounds-checked triangle slot form one atomic
+        // append; splitting them into separate blocks would not add any safety.
+        unsafe { // cjcheck-ignore: unsafe-scope # one triangle append: the three index writes are a single indivisible operation on the checked slot
             idxs.write(idxCount, Int32(a))
             idxs.write(idxCount + 1, Int32(b))
             idxs.write(idxCount + 2, Int32(c))
@@ -1013,7 +1076,7 @@ internal class GeometryBatch {
         if (idxCount == 0 || target.isNull() || verts.isNull() || idxs.isNull()) {
             return
         }
-        let _ = unsafe {
+        let _ = unsafe { // cjcheck-ignore: ignore-result # per-frame draw call: dropping one primitive beats aborting the frame; SDL keeps the error for diagnosis
             SDL_RenderGeometry(target, texture, verts, Int32(vertCount), idxs, Int32(idxCount))
         }
     }

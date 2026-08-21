@@ -163,22 +163,22 @@ public class Renderer {
             return
         }
         ensureSdl(unsafe { SDL_SetRenderTarget(ptr, CPointer<Unit>()) }, "SDL_SetRenderTarget")
-        let _ = unsafe { SDL_SetRenderScale(ptr, 1.0, 1.0) }
+        let _ = unsafe { SDL_SetRenderScale(ptr, 1.0, 1.0) } // cjcheck-ignore: ignore-result # best-effort render-state toggle: a refused scale leaves the previous scale, visibly wrong but never fatal
         scaleX = 1.0
         scaleY = 1.0
         var outW: Int32 = 0
         var outH: Int32 = 0
-        let _ = unsafe { SDL_GetRenderOutputSize(ptr, inout outW, inout outH) }
+        let _ = unsafe { SDL_GetRenderOutputSize(ptr, inout outW, inout outH) } // cjcheck-ignore: ignore-result # on failure outW/outH stay 0 and the blit below degenerates to a no-op — the recovery IS the zero size
         var dst = SdlFRect()
         dst.x = 0.0
         dst.y = 0.0
         dst.w = Float32(outW)
         dst.h = Float32(outH)
-        let _ = unsafe { SDL_RenderTexture(ptr, ssTarget, CPointer<SdlFRect>(), inout dst) }
+        let _ = unsafe { SDL_RenderTexture(ptr, ssTarget, CPointer<SdlFRect>(), inout dst) } // cjcheck-ignore: ignore-result # per-frame draw call: dropping one primitive beats aborting the frame; SDL keeps the error for diagnosis
     }
 
     private func drawDirect(clearColor: Color): Unit {
-        let _ = unsafe { SDL_SetRenderScale(ptr, contentScale, contentScale) }
+        let _ = unsafe { SDL_SetRenderScale(ptr, contentScale, contentScale) } // cjcheck-ignore: ignore-result # best-effort render-state toggle: a refused scale leaves the previous scale, visibly wrong but never fatal
         scaleX = contentScale
         scaleY = contentScale
         // Direct mode draws on the window target, whose clip persists across frames too.
@@ -214,15 +214,15 @@ public class Renderer {
             ssEnabled = false
             return
         }
-        let _ = unsafe { SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_LINEAR) }
-        let _ = unsafe { SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE) }
+        let _ = unsafe { SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_LINEAR) } // cjcheck-ignore: ignore-result # cosmetic filter preference; the texture works with the default mode
+        let _ = unsafe { SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE) } // cjcheck-ignore: ignore-result # cosmetic blend preference; the texture works with the default mode
         ssTarget = tex
         ssWidth = width
         ssHeight = height
     }
 
     /**
-     * Throws `CuiException` when SDL rejects the renderer draw color update.
+     * Throws `SdlException` when SDL rejects the renderer draw color update.
      */
     public func setColor(color: Color): Unit {
         // A headless renderer (null ptr, used by widget unit tests) draws nothing rather than
@@ -231,12 +231,12 @@ public class Renderer {
             return
         }
         if (!unsafe { SDL_SetRenderDrawColor(ptr, color.r, color.g, color.b, color.a) }) {
-            throw CuiException("SDL_SetRenderDrawColor failed: ${lastSdlError()}")
+            throw SdlException("SDL_SetRenderDrawColor failed: ${lastSdlError()}")
         }
     }
 
     /**
-     * Throws `CuiException` when SDL cannot clear the current render target.
+     * Throws `SdlException` when SDL cannot clear the current render target.
      */
     public func clear(color: Color): Unit {
         // Headless renderers no-op like every other draw entry point, so canvas or shell
@@ -246,10 +246,15 @@ public class Renderer {
         }
         setColor(color)
         if (!unsafe { SDL_RenderClear(ptr) }) {
-            throw CuiException("SDL_RenderClear failed: ${lastSdlError()}")
+            throw SdlException("SDL_RenderClear failed: ${lastSdlError()}")
         }
     }
 
+    /**
+     * Presents the finished frame to the window (SDL_RenderPresent); call after `endScene`.
+     *
+     * Throws `SdlException` when SDL cannot present the frame.
+     */
     public func present(): Unit {
         if (ptr.isNull()) {
             return // headless renderer: nothing to present
@@ -258,12 +263,12 @@ public class Renderer {
     }
 
     /**
-     * Throws `CuiException` when the scale is invalid or SDL rejects the renderer scale.
+     * Throws `SdlException` when the scale is invalid or SDL rejects the renderer scale.
      * Headless: the logical scale is still recorded, so text metrics stay consistent.
      */
     public func setScale(scale: Float32): Unit {
         if (scale <= 0.0) {
-            throw CuiException("Renderer scale must be greater than 0.")
+            throw SdlException("Renderer scale must be greater than 0.")
         }
         if (!ptr.isNull()) {
             ensureSdl(unsafe { SDL_SetRenderScale(ptr, scale, scale) }, "SDL_SetRenderScale")
@@ -272,6 +277,10 @@ public class Renderer {
         scaleY = scale
     }
 
+    /**
+     * Sets the renderer's vsync mode (SDL_SetRenderVSync): 0 disables, 1 syncs every refresh,
+     * -1 requests adaptive vsync. Throws `SdlException` when SDL rejects the mode.
+     */
     public func setVSync(vsync: Int32): Unit {
         if (ptr.isNull()) {
             return
@@ -279,6 +288,10 @@ public class Renderer {
         ensureSdl(unsafe { SDL_SetRenderVSync(ptr, vsync) }, "SDL_SetRenderVSync")
     }
 
+    /**
+     * The renderer's current vsync mode (SDL_GetRenderVSync); 0 when headless.
+     * Throws `SdlException` when SDL cannot report the mode.
+     */
     public func vsync(): Int32 {
         if (ptr.isNull()) {
             return 0
@@ -288,6 +301,10 @@ public class Renderer {
         value
     }
 
+    /**
+     * Restricts drawing to `rect` and moves the coordinate origin to its top-left corner
+     * (SDL_SetRenderViewport). Throws `SdlException` when SDL rejects the viewport.
+     */
     public func setViewport(rect: Rect): Unit {
         if (ptr.isNull()) {
             return
@@ -296,6 +313,10 @@ public class Renderer {
         ensureSdl(unsafe { SDL_SetRenderViewport(ptr, inout raw) }, "SDL_SetRenderViewport")
     }
 
+    /**
+     * Restores the viewport to the entire render target (SDL_SetRenderViewport with null).
+     * Throws `SdlException` when SDL cannot reset the viewport.
+     */
     public func resetViewport(): Unit {
         if (ptr.isNull()) {
             return
@@ -303,6 +324,10 @@ public class Renderer {
         ensureSdl(unsafe { SDL_SetRenderViewport(ptr, CPointer<SdlRect>()) }, "SDL_SetRenderViewport")
     }
 
+    /**
+     * The current viewport rectangle (SDL_GetRenderViewport); a zero rect when headless.
+     * Throws `SdlException` when SDL cannot report the viewport.
+     */
     public func viewport(): Rect {
         if (ptr.isNull()) {
             return Rect(0.0, 0.0, 0.0, 0.0)
@@ -361,6 +386,10 @@ public class Renderer {
         ensureSdl(unsafe { SDL_SetRenderClipRect(ptr, CPointer<SdlRect>()) }, "SDL_SetRenderClipRect")
     }
 
+    /**
+     * The device clip rectangle SDL reports (SDL_GetRenderClipRect); headless, the top of the
+     * logical clip stack or a zero rect. Throws `SdlException` when SDL cannot report the clip.
+     */
     // Headless, the logical clip stack still answers: the top entry (or a zero rect).
     public func clipRect(): Rect {
         if (ptr.isNull()) {
@@ -374,6 +403,7 @@ public class Renderer {
         rectFromSdl(raw)
     }
 
+    /** Whether a clip rectangle is currently active (SDL_RenderClipEnabled; headless, a non-empty clip stack). */
     public func clipEnabled(): Bool {
         if (ptr.isNull()) {
             return !clipStack.isEmpty()
@@ -381,6 +411,10 @@ public class Renderer {
         unsafe { SDL_RenderClipEnabled(ptr) }
     }
 
+    /**
+     * Sets the color scale applied to all subsequent draws (SDL_SetRenderColorScale) — values
+     * above 1.0 brighten, below dim. Throws `SdlException` when SDL rejects the scale.
+     */
     public func setColorScale(scale: Float32): Unit {
         if (ptr.isNull()) {
             return
@@ -388,6 +422,10 @@ public class Renderer {
         ensureSdl(unsafe { SDL_SetRenderColorScale(ptr, scale) }, "SDL_SetRenderColorScale")
     }
 
+    /**
+     * The current renderer color scale (SDL_GetRenderColorScale); 1.0 when headless.
+     * Throws `SdlException` when SDL cannot report the scale.
+     */
     public func colorScale(): Float32 {
         if (ptr.isNull()) {
             return 1.0
@@ -397,6 +435,10 @@ public class Renderer {
         value
     }
 
+    /**
+     * Sets the draw color from floating-point channels, each clamped to `[0, 1]`
+     * (SDL_SetRenderDrawColorFloat). Throws `SdlException` when SDL rejects the color.
+     */
     public func setColorFloat(r: Float32, g: Float32, b: Float32, a: Float32): Unit {
         if (ptr.isNull()) {
             return
@@ -406,26 +448,42 @@ public class Renderer {
         }, "SDL_SetRenderDrawColorFloat")
     }
 
+    /**
+     * Draws a single point at (`x`, `y`) in logical pixels (SDL_RenderPoint).
+     * Throws `SdlException` when SDL rejects the draw color.
+     */
     public func point(x: Float32, y: Float32, color: Color): Unit {
         setColor(color)
-        let _ = unsafe { SDL_RenderPoint(ptr, x, y) }
+        let _ = unsafe { SDL_RenderPoint(ptr, x, y) } // cjcheck-ignore: ignore-result # per-frame draw call: dropping one primitive beats aborting the frame; SDL keeps the error for diagnosis
     }
 
+    /**
+     * Draws a 1px line between two points in logical pixels (SDL_RenderLine); for thick or
+     * anti-aliased strokes use `strokeLine`. Throws `SdlException` when SDL rejects the draw color.
+     */
     public func line(x1: Float32, y1: Float32, x2: Float32, y2: Float32, color: Color): Unit {
         setColor(color)
-        let _ = unsafe { SDL_RenderLine(ptr, x1, y1, x2, y2) }
+        let _ = unsafe { SDL_RenderLine(ptr, x1, y1, x2, y2) } // cjcheck-ignore: ignore-result # per-frame draw call: dropping one primitive beats aborting the frame; SDL keeps the error for diagnosis
     }
 
+    /**
+     * Draws a 1px rectangle outline in logical pixels (SDL_RenderRect); for thick or
+     * anti-aliased outlines use `strokeRect`. Throws `SdlException` when SDL rejects the draw color.
+     */
     public func rect(rect: Rect, color: Color): Unit {
         setColor(color)
         var raw = rect.toSdlFRect()
-        let _ = unsafe { SDL_RenderRect(ptr, inout raw) }
+        let _ = unsafe { SDL_RenderRect(ptr, inout raw) } // cjcheck-ignore: ignore-result # per-frame draw call: dropping one primitive beats aborting the frame; SDL keeps the error for diagnosis
     }
 
+    /**
+     * Fills a rectangle in logical pixels with a solid color (SDL_RenderFillRect).
+     * Throws `SdlException` when SDL rejects the draw color.
+     */
     public func fill(rect: Rect, color: Color): Unit {
         setColor(color)
         var raw = rect.toSdlFRect()
-        let _ = unsafe { SDL_RenderFillRect(ptr, inout raw) }
+        let _ = unsafe { SDL_RenderFillRect(ptr, inout raw) } // cjcheck-ignore: ignore-result # per-frame draw call: dropping one primitive beats aborting the frame; SDL keeps the error for diagnosis
     }
 
     /**
@@ -458,6 +516,10 @@ public class Renderer {
         geometry.strokeRoundedRectDashed(ptr, rect, roundedRadius(rect, radius), pen, dash, gap)
     }
 
+    /**
+     * Fills a rounded rectangle as an anti-aliased mesh; the radius is clamped to half the
+     * short side, and a radius near zero degrades to a plain `fill`.
+     */
     public func fillRoundedRect(rect: Rect, radius: Float32, color: Color): Unit {
         let r = roundedRadius(rect, radius)
         if (r <= 0.5) {
@@ -506,6 +568,10 @@ public class Renderer {
         geometry.fillRoundedRectSoft(ptr, rect, roundedRadius(rect, radius), color, feather)
     }
 
+    /**
+     * A 1px-pen circle outline; `segments` is a minimum tessellation hint. Shorthand for
+     * `strokeCircle` with a unit-width pen.
+     */
     public func circle(cx: Float32, cy: Float32, radius: Float32, color: Color, segments!: Int64 = 0): Unit {
         geometry.strokeCircle(ptr, Point(cx, cy), radius, Pen(width: 1.0, color: color), segments)
     }
@@ -518,6 +584,7 @@ public class Renderer {
         geometry.strokeCircle(ptr, Point(cx, cy), radius, pen, segments)
     }
 
+    /** Fills a circle centred on (`cx`, `cy`) as an anti-aliased triangle-fan mesh. */
     public func fillCircle(cx: Float32, cy: Float32, radius: Float32, color: Color): Unit {
         geometry.fillCircle(ptr, Point(cx, cy), radius, color)
     }
@@ -543,7 +610,7 @@ public class Renderer {
      * All provided lists need the same even size of at least four; invalid sizes draw
      * nothing.
      *
-     * Throws `CuiException` when the texture is closed.
+     * Throws `SdlException` when the texture is closed.
      */
     public func texturedStrip(
         texture: Texture,
@@ -552,7 +619,7 @@ public class Renderer {
         alphas!: ?ArrayList<Float32> = None
     ): Unit {
         if (texture.isClosed()) {
-            throw CuiException("Cannot render a closed texture.")
+            throw SdlException("Cannot render a closed texture.")
         }
         geometry.texturedStrip(ptr, texture.ptr, points, texPoints, alphas, texture.width, texture.height)
     }
@@ -595,10 +662,10 @@ public class Renderer {
                 }
                 let px = snapPixel(x * scaleX, step)
                 let py = snapPixel(y * scaleY, step)
-                let _ = unsafe { SDL_SetRenderScale(ptr, 1.0, 1.0) }
+                let _ = unsafe { SDL_SetRenderScale(ptr, 1.0, 1.0) } // cjcheck-ignore: ignore-result # best-effort render-state toggle: a refused scale leaves the previous scale, visibly wrong but never fatal // cjcheck-ignore: ignore-result # best-effort render-state toggle: a refused scale leaves the previous scale, visibly wrong but never fatal
                 applyClipForTextPass()
                 value.draw(text, px, py, pointSize * scaleY, flags, facePath, native)
-                let _ = unsafe { SDL_SetRenderScale(ptr, scaleX, scaleY) }
+                let _ = unsafe { SDL_SetRenderScale(ptr, scaleX, scaleY) } // cjcheck-ignore: ignore-result # best-effort render-state toggle: a refused scale leaves the previous scale, visibly wrong but never fatal
                 applyClip()
             case None => ()
         }
@@ -659,7 +726,7 @@ public class Renderer {
      * colour is applied per draw as a colour mod), so a static rotated label costs one
      * rasterization, not one per frame. Headless renderers and empty text no-op.
      */
-    public func textRotated(
+    public func textRotated( // cjcheck-ignore: param-count # public fluent API: 5 positional + 3 named-with-default params is the binding's established text signature shape
         text: String,
         centerX: Float32,
         centerY: Float32,
@@ -880,7 +947,7 @@ public class Renderer {
      * automated visual snapshots and documentation thumbnails. Headless it is a no-op —
      * there are no pixels to read.
      *
-     * Throws `CuiException` when SDL cannot read the pixels or save the file.
+     * Throws `SdlException` when SDL cannot read the pixels or save the file.
      */
     public func captureBmp(path: String): Unit {
         if (ptr.isNull()) {
@@ -888,14 +955,14 @@ public class Renderer {
         }
         let surface = unsafe { SDL_RenderReadPixels(ptr, CPointer<SdlRect>()) }
         if (surface.isNull()) {
-            throw CuiException("SDL_RenderReadPixels failed: ${lastSdlError()}")
+            throw SdlException("SDL_RenderReadPixels failed: ${lastSdlError()}")
         }
         let cPath = unsafe { LibC.mallocCString(path) }
         try (pathResource = cPath.asResource()) {
             let saved = unsafe { SDL_SaveBMP(surface, pathResource.value) }
             unsafe { SDL_DestroySurface(surface) }
             if (!saved) {
-                throw CuiException("SDL_SaveBMP failed: ${lastSdlError()}")
+                throw SdlException("SDL_SaveBMP failed: ${lastSdlError()}")
             }
         }
     }
@@ -930,7 +997,7 @@ private func roundedRadius(rect: Rect, radius: Float32): Float32 {
 }
 
 /**
- * Throws `CuiException` when the system-font backend cannot initialize.
+ * Throws `SdlException` when the system-font backend cannot initialize.
  */
 private func createTextBackend(renderer: CPointer<Unit>): ?NativeTextRenderer {
     if (renderer.isNull()) {
@@ -939,6 +1006,6 @@ private func createTextBackend(renderer: CPointer<Unit>): ?NativeTextRenderer {
     try {
         Some(NativeTextRenderer(renderer))
     } catch (error: NativeTextException) {
-        throw CuiException("System UI font initialization failed: ${error.message}")
+        throw SdlException("System UI font initialization failed: ${error.message}")
     }
 }

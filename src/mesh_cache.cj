@@ -1,7 +1,5 @@
 package sdl
 
-import std.collection.HashMap
-
 // How many distinct shape meshes to retain before the older generation is dropped. A UI reuses a
 // small set of shapes (a few panel/card/chip sizes, each with a fill, a border and two shadow
 // layers), so this is ample; a churning shape (an animated size) simply misses and re-tessellates
@@ -59,73 +57,6 @@ internal class CachedMesh {
         }
         if (indices.isNotNull()) {
             unsafe { LibC.free(indices) }
-        }
-    }
-}
-
-// A bounded, two-generation cache of shape meshes. When the active generation fills, the older
-// (retired) generation is dropped whole — running `destroy` on each mesh — and the current one
-// becomes retired; a hit in the retired generation is promoted back so a hot shape survives a
-// rotation. Because the meshes own native buffers, the promote path removes the mesh from the retired
-// generation BEFORE re-inserting it, so the rotation that insert may trigger cannot destroy the mesh
-// being returned — the same native-lifetime safeguard as the shaped-text cache. `destroy` is injected
-// (production frees the native buffers) so the eviction bookkeeping is unit-testable without a GPU.
-internal class MeshCache {
-    private let capacity: Int64
-    private let destroy: (CachedMesh) -> Unit
-    private var active = HashMap<Int64, CachedMesh>()
-    private var retired = HashMap<Int64, CachedMesh>()
-
-    init(capacity: Int64, destroy: (CachedMesh) -> Unit) {
-        this.capacity = max(1, capacity)
-        this.destroy = destroy
-    }
-
-    func get(key: Int64): ?CachedMesh {
-        match (active.get(key)) {
-            case Some(mesh) => return Some(mesh)
-            case None => ()
-        }
-        match (retired.get(key)) {
-            case Some(mesh) =>
-                let _ = retired.remove(key)
-                insert(key, mesh)
-                Some(mesh)
-            case None => None
-        }
-    }
-
-    func put(key: Int64, mesh: CachedMesh): Unit {
-        insert(key, mesh)
-    }
-
-    // Destroys every cached mesh across both generations. Called when the owning batch is disposed.
-    func freeAll(): Unit {
-        destroyGeneration(active)
-        active.clear()
-        destroyGeneration(retired)
-        retired.clear()
-    }
-
-    // Live entries across both generations — for tests and diagnostics.
-    func size(): Int64 {
-        active.size + retired.size
-    }
-
-    private func insert(key: Int64, mesh: CachedMesh): Unit {
-        if (active.size >= capacity) {
-            destroyGeneration(retired)
-            retired.clear()
-            let recycled = retired
-            retired = active
-            active = recycled
-        }
-        active[key] = mesh
-    }
-
-    private func destroyGeneration(generation: HashMap<Int64, CachedMesh>): Unit {
-        for ((_, mesh) in generation) {
-            destroy(mesh)
         }
     }
 }

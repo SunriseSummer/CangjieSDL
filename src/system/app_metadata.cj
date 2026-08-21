@@ -2,6 +2,7 @@ package sdl.system
 
 import sdl.ensureSdl
 
+/** Classifies the kind of application reported in SDL app metadata; `CustomMetadataType` carries an arbitrary type string. */
 public enum AppMetadataType {
     | Application
     | Game
@@ -9,6 +10,7 @@ public enum AppMetadataType {
     | CustomMetadataType(String)
 }
 
+/** Identifies a well-known SDL app metadata property; `CustomMetadataProperty` addresses a property by raw name. */
 public enum AppMetadataProperty {
     | Name
     | Version
@@ -20,6 +22,7 @@ public enum AppMetadataProperty {
     | CustomMetadataProperty(String)
 }
 
+/** Aggregates the application metadata values applied to SDL in one call. */
 public struct AppMetadata {
     public var name: ?String
     public var version: ?String
@@ -40,9 +43,10 @@ public struct AppMetadata {
     }
 }
 
+/** Sets, updates, and queries the application metadata SDL exposes to the operating system. */
 public class ApplicationMetadata {
     /**
-     * Throws `CuiException` when SDL cannot apply application metadata.
+     * Throws `SdlException` when SDL cannot apply application metadata.
      */
     public static func apply(metadata: AppMetadata): Unit {
         let cName = optionalMetadataCString(metadata.name)
@@ -62,23 +66,23 @@ public class ApplicationMetadata {
     }
 
     /**
-     * Throws `CuiException` when SDL cannot set the metadata property.
+     * Throws `SdlException` when SDL cannot set the metadata property.
      */
     public static func set(property: AppMetadataProperty, value: String): Unit {
         ensureMetadataName(appMetadataPropertyName(property))
-        withMetadataStrings(property, value, true)
+        withMetadataStrings(property, value, hasValue: true)
     }
 
     /**
-     * Throws `CuiException` when SDL cannot remove the metadata property.
+     * Throws `SdlException` when SDL cannot remove the metadata property.
      */
     public static func remove(property: AppMetadataProperty): Unit {
         ensureMetadataName(appMetadataPropertyName(property))
-        withMetadataStrings(property, "", false)
+        withMetadataStrings(property, "", hasValue: false)
     }
 
     /**
-     * Throws `CuiException` when the property name is empty.
+     * Throws `SdlException` when the property name is empty.
      */
     public static func get(property: AppMetadataProperty): ?String {
         let name = appMetadataPropertyName(property)

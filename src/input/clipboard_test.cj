@@ -1,13 +1,13 @@
 package sdl.input
 
-import sdl.{CuiException}
+import sdl.{SdlException}
 
 @Test
-func clipboardDataValidationRejectsUnsafeInputs(): Unit {
-    expectCuiException({=> ensureClipboardDataItems([])})
-    expectCuiException({=> ensureClipboardDataItems([ClipboardData("", [])])})
-    expectCuiException({=> ensureClipboardDataItems([ClipboardData("text/plain\nbad", [])])})
-    expectCuiException({
+func clipboardDataValidationRejectsUnsafeInputs(): Unit { // cjcheck-ignore: smoke-test # assertions live in the expect* helpers this test calls; each ends in @Expect/@Fail
+    expectSdlException({=> ensureClipboardDataItems([])})
+    expectSdlException({=> ensureClipboardDataItems([ClipboardData("", [])])})
+    expectSdlException({=> ensureClipboardDataItems([ClipboardData("text/plain\nbad", [])])})
+    expectSdlException({
         => ensureClipboardDataItems(
             [
                 ClipboardData("text/plain", []),
@@ -98,11 +98,11 @@ func clipboardOfferCallbackReturnsRequestedBytes(): Unit {
     }
 }
 
-private func expectCuiException(action: () -> Unit): Unit {
+private func expectSdlException(action: () -> Unit): Unit {
     try {
         action()
-        @Fail("Expected CuiException.")
-    } catch (e: CuiException) {
+        @Fail("Expected SdlException.")
+    } catch (e: SdlException) {
         @Expect(e.message.size > 0)
     }
 }

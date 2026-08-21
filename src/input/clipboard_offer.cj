@@ -68,13 +68,11 @@ internal class ClipboardOffer {
             }
         }
         freeClipboardCStringArray(mimeTypeStrings)
-        unsafe {
-            if (rawMimeTypes.isNotNull()) {
-                LibC.free(rawMimeTypes)
-            }
-            if (idPtr.isNotNull()) {
-                LibC.free(idPtr)
-            }
+        if (rawMimeTypes.isNotNull()) {
+            unsafe { LibC.free(rawMimeTypes) }
+        }
+        if (idPtr.isNotNull()) {
+            unsafe { LibC.free(idPtr) }
         }
     }
 }
@@ -109,7 +107,7 @@ internal func registerClipboardOffer(offer: ClipboardOffer): Unit {
 }
 
 internal func unregisterClipboardOffer(id: Int64): Unit {
-    let _ = CLIPBOARD_OFFERS.remove(id)
+    let _ = CLIPBOARD_OFFERS.remove(id) // cjcheck-ignore: ignore-result # removal is idempotent here; a miss means nothing to evict
 }
 
 @C
@@ -152,12 +150,10 @@ private func freeClipboardOfferParts(
         }
     }
     freeClipboardCStringArray(mimeTypeStrings)
-    unsafe {
-        if (rawMimeTypes.isNotNull()) {
-            LibC.free(rawMimeTypes)
-        }
-        if (idPtr.isNotNull()) {
-            LibC.free(idPtr)
-        }
+    if (rawMimeTypes.isNotNull()) {
+        unsafe { LibC.free(rawMimeTypes) }
+    }
+    if (idPtr.isNotNull()) {
+        unsafe { LibC.free(idPtr) }
     }
 }

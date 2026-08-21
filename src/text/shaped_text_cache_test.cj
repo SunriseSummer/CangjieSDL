@@ -25,7 +25,7 @@ private func has(freed: ArrayList<Int64>, id: Int64): Bool {
 @Test
 func generationCacheReturnsMissThenHit(): Unit {
     let freed = ArrayList<Int64>()
-    let cache = GenerationCache<Probe>(4) {p => freed.add(p.id)}
+    let cache = GenerationCache<String, Probe>(4) {p => freed.add(p.id)}
     @Expect(cache.get("a").isNone())
     cache.put("a", Probe(1))
     @Expect(cache.get("a").getOrThrow().id, 1)
@@ -41,7 +41,7 @@ func generationCacheReturnsMissThenHit(): Unit {
 @Test
 func generationCachePromotesHotKeyPastRotation(): Unit {
     let freed = ArrayList<Int64>()
-    let cache = GenerationCache<Probe>(2) {p => freed.add(p.id)}
+    let cache = GenerationCache<String, Probe>(2) {p => freed.add(p.id)}
     cache.put("a", Probe(1))
     cache.put("b", Probe(2))
     cache.put("c", Probe(3)) // rotate: active {a,b} -> retired, active {c}; nothing freed yet
@@ -61,7 +61,7 @@ func generationCachePromotesHotKeyPastRotation(): Unit {
 @Test
 func generationCacheFreesEveryValueExactlyOnce(): Unit {
     let freed = ArrayList<Int64>()
-    let cache = GenerationCache<Probe>(2) {p => freed.add(p.id)}
+    let cache = GenerationCache<String, Probe>(2) {p => freed.add(p.id)}
     var id = 1
     while (id <= 7) {
         cache.put("k${id}", Probe(id))

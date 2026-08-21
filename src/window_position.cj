@@ -1,5 +1,6 @@
 package sdl
 
+/** A window's top-left corner position in screen coordinates. */
 public struct WindowPosition {
     public let x: Int32
     public let y: Int32

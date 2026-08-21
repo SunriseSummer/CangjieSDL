@@ -1,8 +1,9 @@
 package sdl.displays
 
 import std.collection.ArrayList
-import sdl.{CuiException, ensureSdl, lastSdlError, Point, Rect, SDL_INIT_VIDEO, SdlDisplayMode}
+import sdl.{SdlException, ensureSdl, lastSdlError, Point, Rect, SDL_INIT_VIDEO, SdlDisplayMode}
 
+/** The desired size and refresh rate used to search for the closest matching fullscreen display mode. */
 public struct FullscreenModeRequest {
     public let width: Int32
     public let height: Int32
@@ -23,14 +24,14 @@ public struct FullscreenModeRequest {
 }
 
 /**
- * Throws `CuiException` when SDL cannot enumerate displays.
+ * Throws `SdlException` when SDL cannot enumerate displays.
  */
 public func displayIds(): Array<UInt32> {
     ensureDisplayVideoReady()
     var count: Int32 = 0
     let ids = unsafe { SDL_GetDisplays(inout count) }
     if (ids.isNull()) {
-        throw CuiException("SDL_GetDisplays failed: ${lastSdlError()}")
+        throw SdlException("SDL_GetDisplays failed: ${lastSdlError()}")
     }
 
     try {
@@ -41,7 +42,7 @@ public func displayIds(): Array<UInt32> {
 }
 
 /**
- * Throws `CuiException` when SDL cannot query one of the connected displays.
+ * Throws `SdlException` when SDL cannot query one of the connected displays.
  */
 public func allDisplayInfos(): Array<DisplayInfo> {
     let ids = displayIds()
@@ -53,14 +54,14 @@ public func allDisplayInfos(): Array<DisplayInfo> {
 }
 
 /**
- * Throws `CuiException` when SDL cannot enumerate fullscreen modes for the display.
+ * Throws `SdlException` when SDL cannot enumerate fullscreen modes for the display.
  */
 public func fullscreenDisplayModes(id: UInt32): Array<DisplayMode> {
     ensureDisplayId(id)
     var count: Int32 = 0
     let modes = unsafe { SDL_GetFullscreenDisplayModes(id, inout count) }
     if (modes.isNull()) {
-        throw CuiException("SDL_GetFullscreenDisplayModes failed: ${lastSdlError()}")
+        throw SdlException("SDL_GetFullscreenDisplayModes failed: ${lastSdlError()}")
     }
 
     try {
@@ -71,7 +72,7 @@ public func fullscreenDisplayModes(id: UInt32): Array<DisplayMode> {
 }
 
 /**
- * Throws `CuiException` when SDL cannot scan fullscreen modes for the display.
+ * Throws `SdlException` when SDL cannot scan fullscreen modes for the display.
  */
 public func closestFullscreenDisplayMode(id: UInt32, request: FullscreenModeRequest): ?DisplayMode {
     ensureDisplayId(id)
@@ -87,25 +88,25 @@ public func closestFullscreenDisplayMode(id: UInt32, request: FullscreenModeRequ
 }
 
 /**
- * Throws `CuiException` when SDL cannot identify or query the display containing the point.
+ * Throws `SdlException` when SDL cannot identify or query the display containing the point.
  */
 public func displayInfoForPoint(point: Point): DisplayInfo {
     var raw = point.toSdlPoint()
     let id = unsafe { SDL_GetDisplayForPoint(inout raw) }
     if (id == UInt32(0)) {
-        throw CuiException("SDL_GetDisplayForPoint failed: ${lastSdlError()}")
+        throw SdlException("SDL_GetDisplayForPoint failed: ${lastSdlError()}")
     }
     displayInfo(id)
 }
 
 /**
- * Throws `CuiException` when SDL cannot identify or query the display containing the rectangle.
+ * Throws `SdlException` when SDL cannot identify or query the display containing the rectangle.
  */
 public func displayInfoForRect(rect: Rect): DisplayInfo {
     var raw = rect.toSdlRect()
     let id = unsafe { SDL_GetDisplayForRect(inout raw) }
     if (id == UInt32(0)) {
-        throw CuiException("SDL_GetDisplayForRect failed: ${lastSdlError()}")
+        throw SdlException("SDL_GetDisplayForRect failed: ${lastSdlError()}")
     }
     displayInfo(id)
 }
@@ -134,16 +135,16 @@ internal func displayModesFromPointers(
 }
 
 /**
- * Throws `CuiException` when display id is zero.
+ * Throws `SdlException` when display id is zero.
  */
 internal func ensureDisplayId(id: UInt32): Unit {
     if (id == UInt32(0)) {
-        throw CuiException("Display id must not be zero.")
+        throw SdlException("Display id must not be zero.")
     }
 }
 
 /**
- * Throws `CuiException` when SDL cannot initialize video support.
+ * Throws `SdlException` when SDL cannot initialize video support.
  */
 private func ensureDisplayVideoReady(): Unit {
     ensureSdl(unsafe { SDL_Init(SDL_INIT_VIDEO) }, "SDL_Init")

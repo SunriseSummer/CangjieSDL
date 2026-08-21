@@ -1,6 +1,6 @@
 package sdl.dialogs
 
-import sdl.CuiException
+import sdl.SdlException
 
 @Test
 func messageBoxKindMapsToSdlFlags(): Unit {
@@ -74,7 +74,7 @@ private func messageBoxOptionsFail(buttons: Array<MessageBoxButton>): Bool {
     try {
         ensureMessageBoxOptions(options)
         false
-    } catch (e: CuiException) {
+    } catch (e: SdlException) {
         true
     }
 }

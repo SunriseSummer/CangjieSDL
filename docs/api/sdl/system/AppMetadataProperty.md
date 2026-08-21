@@ -42,7 +42,7 @@ main(): Unit {
 | [`Copyright`](#copyright) | 版权声明。 |
 | [`Url`](#url) | 应用主页。 |
 | [`ApplicationType`](#applicationtype) | 应用类别（对应 `AppMetadataType` 的字符串值）。 |
-| [`CustomMetadataProperty(String)`](#custommetadataproperty) | 自定义属性，携带完整的 SDL 属性名；空名在读写时抛 `CuiException`。 |
+| [`CustomMetadataProperty(String)`](#custommetadataproperty) | 自定义属性，携带完整的 SDL 属性名；空名在读写时抛 `SdlException`。 |
 
 ## 枚举值
 
@@ -104,7 +104,7 @@ ApplicationType
 
 ### CustomMetadataProperty
 
-自定义属性，携带完整的 SDL 属性名；空名在读写时抛 `CuiException`。
+自定义属性，携带完整的 SDL 属性名；空名在读写时抛 `SdlException`。
 
 ```cangjie
 CustomMetadataProperty(String)

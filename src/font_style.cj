@@ -85,8 +85,8 @@ public struct FontStyle <: Equatable<FontStyle> {
     }
 
     public operator func ==(other: FontStyle): Bool {
-        bold == other.bold && italic == other.italic && underline == other.underline && strikethrough ==
-            other.strikethrough
+        bold == other.bold && italic == other.italic && underline == other.underline && strikethrough == other
+            .strikethrough
     }
 
     public operator func !=(other: FontStyle): Bool {

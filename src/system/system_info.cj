@@ -2,6 +2,7 @@ package sdl.system
 
 import sdl.ensureSdl
 
+/** Describes the battery/charging status reported by the operating system. */
 public enum PowerState {
     | Error
     | Unknown
@@ -11,6 +12,7 @@ public enum PowerState {
     | Charged
 }
 
+/** Reports the power state plus remaining battery seconds and percent when the platform can provide them. */
 public struct PowerInfo {
     public let state: PowerState
     public let seconds: ?Int32
@@ -23,6 +25,7 @@ public struct PowerInfo {
     }
 }
 
+/** Describes CPU core count, memory sizes, and SIMD instruction set support. */
 public struct CpuInfo {
     public var logicalCores: Int32 = 0
     public var cacheLineBytes: Int32 = 0
@@ -44,6 +47,7 @@ public struct CpuInfo {
     public var hasLasx: Bool = false
 }
 
+/** Returns the SDL platform name, or "Unknown" when it is unavailable. */
 public func platformName(): String {
     let platform = unsafe { SDL_GetPlatform() }
     if (platform.isNull()) {
@@ -53,6 +57,7 @@ public func platformName(): String {
     }
 }
 
+/** Queries CPU core count, cache line size, RAM, page size, and SIMD feature flags from SDL. */
 public func cpuInfo(): CpuInfo {
     var info = CpuInfo()
     info.logicalCores = unsafe { SDL_GetNumLogicalCPUCores() }
@@ -76,6 +81,7 @@ public func cpuInfo(): CpuInfo {
     info
 }
 
+/** Queries the current power state and battery levels from SDL. */
 public func powerInfo(): PowerInfo {
     var seconds: Int32 = -1
     var percent: Int32 = -1
@@ -84,7 +90,7 @@ public func powerInfo(): PowerInfo {
 }
 
 /**
- * Throws `CuiException` when SDL cannot ask the operating system to open a URL handler.
+ * Throws `SdlException` when SDL cannot ask the operating system to open a URL handler.
  */
 public func openUrl(url: String): Unit {
     let cUrl = unsafe { LibC.mallocCString(url) }

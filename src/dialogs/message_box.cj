@@ -2,18 +2,24 @@ package sdl.dialogs
 
 import sdl.{ensureSdl, SdlWindow}
 
+/** The severity icon a native message box displays: error, warning, or plain information. */
 public enum MessageBoxKind {
     | Error
     | Warning
     | Information
 }
 
+/** How message box buttons are laid out: the platform's convention or a forced left-to-right/right-to-left order. */
 public enum MessageBoxButtonOrder {
     | PlatformDefault
     | LeftToRight
     | RightToLeft
 }
 
+/**
+ * One button in a message box: the id returned when it is chosen, its label,
+ * and whether Return or Escape triggers it by default.
+ */
 public struct MessageBoxButton {
     public let id: Int32
     public let label: String
@@ -33,6 +39,7 @@ public struct MessageBoxButton {
     }
 }
 
+/** An 8-bit-per-channel RGB color used in a message box color scheme. */
 public struct MessageBoxColor {
     public let r: UInt8
     public let g: UInt8
@@ -45,6 +52,7 @@ public struct MessageBoxColor {
     }
 }
 
+/** Colors for each part of a message box (background, text, and button states), for backends that honor them. */
 public struct MessageBoxColorScheme {
     public let background: MessageBoxColor
     public let text: MessageBoxColor
@@ -67,6 +75,10 @@ public struct MessageBoxColorScheme {
     }
 }
 
+/**
+ * Full configuration for `showMessageBox`: title, message, severity, buttons,
+ * button order, and an optional color scheme; defaults to an information box with a single "OK" button.
+ */
 public struct MessageBoxOptions {
     public var title: String
     public var message: String
@@ -86,7 +98,7 @@ public struct MessageBoxOptions {
 }
 
 /**
- * Throws `CuiException` when SDL cannot show the native message box.
+ * Throws `SdlException` when SDL cannot show the native message box.
  */
 public func showSimpleMessageBox(
     title: String,
@@ -100,14 +112,14 @@ public func showSimpleMessageBox(
         try (messageResource = cMessage.asResource()) {
             ensureSdl(unsafe {
                 SDL_ShowSimpleMessageBox(messageBoxFlag(kind), titleResource.value, messageResource.value,
-                    messageBoxWindow(window))
+                    parentWindowPtr(window))
             }, "SDL_ShowSimpleMessageBox")
         }
     }
 }
 
 /**
- * Throws `CuiException` when options are invalid or SDL cannot show the native message box.
+ * Throws `SdlException` when options are invalid or SDL cannot show the native message box.
  */
 public func showMessageBox(options: MessageBoxOptions, window!: ?SdlWindow = None): Int32 {
     ensureMessageBoxOptions(options)
@@ -122,7 +134,7 @@ public func showMessageBox(options: MessageBoxOptions, window!: ?SdlWindow = Non
         fillRawButtons(rawButtons, buttonTexts, options.buttons)
         var raw = SdlMessageBoxData()
         raw.flags = messageBoxFlags(options.kind, options.buttonOrder)
-        raw.window = messageBoxWindow(window)
+        raw.window = parentWindowPtr(window)
         raw.title = cTitle
         raw.message = cMessage
         raw.numbuttons = Int32(options.buttons.size)

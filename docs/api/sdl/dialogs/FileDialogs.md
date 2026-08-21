@@ -94,7 +94,7 @@ public static func openFile(options!: FileDialogOptions = FileDialogOptions(), w
 
 **异常**
 
-- `CuiException` — 对话框选项非法时。
+- `SdlException` — 对话框选项非法时。
 
 ### saveFile
 
@@ -113,7 +113,7 @@ public static func saveFile(options!: FileDialogOptions = FileDialogOptions(), w
 
 **异常**
 
-- `CuiException` — 对话框选项非法时。
+- `SdlException` — 对话框选项非法时。
 
 ### openFolder
 
@@ -132,7 +132,7 @@ public static func openFolder(options!: FileDialogOptions = FileDialogOptions(),
 
 **异常**
 
-- `CuiException` — 对话框选项非法时。
+- `SdlException` — 对话框选项非法时。
 
 ## 另请参阅
 

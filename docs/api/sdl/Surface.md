@@ -4,7 +4,7 @@
 
 `sdl` 包中的 public class
 
-CPU 侧的 RGBA 像素缓冲，包装 SDL_Surface：可新建、从 BMP/PNG 文件加载、逐像素写入并存回 BMP 文件。表面独立于窗口与渲染器存在；要参与 GPU 绘制，先经 [`Renderer.textureFromSurface`](Renderer.md#texturefromsurface) 转为[纹理](Texture.md)。SDL 无法创建、读写、加载或保存表面时，方法把失败状态转换为 `CuiException`；[`close`](#close) 可重复调用。
+CPU 侧的 RGBA 像素缓冲，包装 SDL_Surface：可新建、从 BMP/PNG 文件加载、逐像素写入并存回 BMP 文件。表面独立于窗口与渲染器存在；要参与 GPU 绘制，先经 [`Renderer.textureFromSurface`](Renderer.md#texturefromsurface) 转为[纹理](Texture.md)。SDL 无法创建、读写、加载或保存表面时，方法把失败状态转换为 `SdlException`；[`close`](#close) 可重复调用。
 
 ## 声明
 
@@ -69,7 +69,7 @@ public static func create(width: Int32, height: Int32): Surface
 
 **异常**
 
-- `CuiException` — SDL 无法分配表面时。
+- `SdlException` — SDL 无法分配表面时。
 
 ### load
 
@@ -87,7 +87,7 @@ public static func load(path: String): Surface
 
 **异常**
 
-- `CuiException` — 文件无法按推断格式加载时。
+- `SdlException` — 文件无法按推断格式加载时。
 
 ### loadBmp
 
@@ -105,7 +105,7 @@ public static func loadBmp(path: String): Surface
 
 **异常**
 
-- `CuiException` — 文件无法加载时。
+- `SdlException` — 文件无法加载时。
 
 ### loadPng
 
@@ -123,7 +123,7 @@ public static func loadPng(path: String): Surface
 
 **异常**
 
-- `CuiException` — 文件无法加载时。
+- `SdlException` — 文件无法加载时。
 
 ### clear
 
@@ -139,7 +139,7 @@ public func clear(color: Color): Unit
 
 **异常**
 
-- `CuiException` — 表面已关闭，或 SDL 清除失败时。
+- `SdlException` — 表面已关闭，或 SDL 清除失败时。
 
 ### writePixel
 
@@ -156,7 +156,7 @@ public func writePixel(x: Int32, y: Int32, color: Color): Unit
 
 **异常**
 
-- `CuiException` — 表面已关闭，或 SDL 写入失败时。
+- `SdlException` — 表面已关闭，或 SDL 写入失败时。
 
 ### saveBmp
 
@@ -172,7 +172,7 @@ public func saveBmp(path: String): Unit
 
 **异常**
 
-- `CuiException` — 表面已关闭，或 SDL 保存失败时。
+- `SdlException` — 表面已关闭，或 SDL 保存失败时。
 
 ### isClosed
 
@@ -186,7 +186,7 @@ public func isClosed(): Bool
 
 ### close
 
-释放表面内存；幂等，重复调用为空操作。关闭后再调用其他方法抛出 `CuiException`。
+释放表面内存；幂等，重复调用为空操作。关闭后再调用其他方法抛出 `SdlException`。
 
 ```cangjie
 public func close(): Unit

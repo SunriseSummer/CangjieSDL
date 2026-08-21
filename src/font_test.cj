@@ -49,10 +49,10 @@ func cjkFontFileLoadsWithOwnMetrics(): Unit {
         let base = renderer.textWidth(sample, pointSize: 18.0)
         var loadedWidth: Float32 = -1.0
         for (candidate in [
-            "..\\.todo\\testfonts\\LXGWWenKai-Regular.ttf",
-            ".todo\\testfonts\\LXGWWenKai-Regular.ttf",
-            "..\\..\\.todo\\testfonts\\LXGWWenKai-Regular.ttf"
-        ]) {
+                "..\\.todo\\testfonts\\LXGWWenKai-Regular.ttf",
+                ".todo\\testfonts\\LXGWWenKai-Regular.ttf",
+                "..\\..\\.todo\\testfonts\\LXGWWenKai-Regular.ttf"
+            ]) {
             Fonts.register("wenkai-test", candidate)
             let width = renderer.textWidth(sample, pointSize: 18.0, font: "wenkai-test")
             if (width != base) {

@@ -14,7 +14,7 @@ import sdl.*
 
 | 类型 | 说明 |
 |---|---|
-| [`CuiException`](CuiException.md) | SDL 调用失败、参数非法或资源已关闭时，本模块会抛出 `CuiException`。 |
+| [`SdlException`](SdlException.md) | SDL 调用失败、参数非法或资源已关闭时，本模块会抛出 `SdlException`。 |
 | [`Fonts`](Fonts.md) | 进程级注册表，把应用字体名映射到字体文件路径，类似 CSS 的 `@font-face` 表。 |
 | [`Renderer`](Renderer.md) | 窗口的二维绘制入口：绘制几何、文本和纹理，并管理视口与裁剪。 |
 | [`SdlWindow`](SdlWindow.md) | 与自己的渲染器成对创建、成对关闭的 SDL 窗口。 |

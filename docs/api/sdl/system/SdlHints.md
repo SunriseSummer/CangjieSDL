@@ -4,7 +4,7 @@
 
 `sdl.system` 包中的 public class
 
-SDL hint 的读写入口。hint 是进程内的运行时配置开关；多数须在受影响的子系统初始化前设置。`set` 与 `setBool` 在 SDL 拒绝写入时把失败状态转换为 `CuiException`；查询和重置方法按返回值表示结果。
+SDL hint 的读写入口。hint 是进程内的运行时配置开关；多数须在受影响的子系统初始化前设置。`set` 与 `setBool` 在 SDL 拒绝写入时把失败状态转换为 `SdlException`；查询和重置方法按返回值表示结果。
 
 ## 声明
 
@@ -84,7 +84,7 @@ public static func set(setting: SdlHintSetting): Unit
 
 **异常**
 
-- `CuiException` — hint 名为空，或 SDL 拒绝该 hint 时。
+- `SdlException` — hint 名为空，或 SDL 拒绝该 hint 时。
 
 ### setBool
 
@@ -102,7 +102,7 @@ public static func setBool(hint: SdlHint, value: Bool, priority!: HintPriority =
 
 **异常**
 
-- `CuiException` — hint 名为空，或 SDL 拒绝该 hint 时。
+- `SdlException` — hint 名为空，或 SDL 拒绝该 hint 时。
 
 ### apply
 
@@ -118,7 +118,7 @@ public static func apply(settings: Array<SdlHintSetting>): Unit
 
 **异常**
 
-- `CuiException` — 任一条 hint 被拒绝时。
+- `SdlException` — 任一条 hint 被拒绝时。
 
 ### get
 
@@ -136,7 +136,7 @@ public static func get(hint: SdlHint): ?String
 
 **异常**
 
-- `CuiException` — hint 名为空时。
+- `SdlException` — hint 名为空时。
 
 ### getBool
 
@@ -155,7 +155,7 @@ public static func getBool(hint: SdlHint, defaultValue: Bool): Bool
 
 **异常**
 
-- `CuiException` — hint 名为空时。
+- `SdlException` — hint 名为空时。
 
 ### reset
 
@@ -173,7 +173,7 @@ public static func reset(hint: SdlHint): Bool
 
 **异常**
 
-- `CuiException` — hint 名为空时。
+- `SdlException` — hint 名为空时。
 
 ### resetAll
 

@@ -1,5 +1,6 @@
 package sdl
 
+/** Progress display mode for the window's native taskbar entry (see `setProgressState`). */
 public enum WindowProgressState {
     | Inactive
     | Indeterminate
@@ -8,6 +9,7 @@ public enum WindowProgressState {
     | Error
 }
 
+/** Aspect ratio bounds enforced on user resizes; 0 means the bound is disabled. */
 public struct WindowAspectRatio {
     public let minimum: Float32
     public let maximum: Float32
@@ -18,6 +20,7 @@ public struct WindowAspectRatio {
     }
 }
 
+/** Thickness of the window decorations around the client area, in window pixels. */
 public struct WindowBorderSize {
     public let top: Int32
     public let left: Int32
@@ -32,6 +35,10 @@ public struct WindowBorderSize {
     }
 }
 
+/*
+ * Snapshot of an SDL window's state flags, decoded from the raw `SDL_GetWindowFlags` bitmask
+ * into one Bool per flag; `raw` keeps the original bitmask.
+ */
 public struct WindowFlags {
     public let raw: UInt64
     public let fullscreen: Bool
@@ -134,14 +141,14 @@ internal func windowProgressStateCode(state: WindowProgressState): Int32 {
 }
 
 /**
- * Throws `CuiException` when the aspect ratio bounds cannot be passed safely to SDL.
+ * Throws `SdlException` when the aspect ratio bounds cannot be passed safely to SDL.
  */
 internal func validateWindowAspectRatio(minimum: Float32, maximum: Float32): Unit {
     if (minimum < 0.0 || maximum < 0.0) {
-        throw CuiException("Window aspect ratio bounds cannot be negative.")
+        throw SdlException("Window aspect ratio bounds cannot be negative.")
     }
     if (minimum > 0.0 && maximum > 0.0 && minimum > maximum) {
-        throw CuiException("Window minimum aspect ratio cannot exceed maximum aspect ratio.")
+        throw SdlException("Window minimum aspect ratio cannot exceed maximum aspect ratio.")
     }
 }
 

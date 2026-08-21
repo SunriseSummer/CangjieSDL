@@ -4,7 +4,7 @@
 
 `sdl.input` 包中的 public class
 
-SDL3 剪贴板的主线程访问入口：普通文本、主选择文本（X11 的选中即复制），以及带 MIME 类型的二进制数据。全部为静态方法，须在视频子系统初始化后（通常已有窗口）于主线程调用。写入失败以及读取已报告为可用的二进制数据失败时，方法把 SDL 错误转换为 `CuiException`；探测不到内容则按各方法契约返回 `false`、`None` 或空值。文本读取遇到空指针时返回空字符串。
+SDL3 剪贴板的主线程访问入口：普通文本、主选择文本（X11 的选中即复制），以及带 MIME 类型的二进制数据。全部为静态方法，须在视频子系统初始化后（通常已有窗口）于主线程调用。写入失败以及读取已报告为可用的二进制数据失败时，方法把 SDL 错误转换为 `SdlException`；探测不到内容则按各方法契约返回 `false`、`None` 或空值。文本读取遇到空指针时返回空字符串。
 
 ## 声明
 
@@ -85,7 +85,7 @@ public static func setText(text: String): Unit
 
 **异常**
 
-- `CuiException` — SDL 无法更新剪贴板时。
+- `SdlException` — SDL 无法更新剪贴板时。
 
 ### hasText
 
@@ -121,7 +121,7 @@ public static func setPrimarySelectionText(text: String): Unit
 
 **异常**
 
-- `CuiException` — SDL 无法更新主选择时。
+- `SdlException` — SDL 无法更新主选择时。
 
 ### hasPrimarySelectionText
 
@@ -157,7 +157,7 @@ public static func setData(items: Array<ClipboardData>): Unit
 
 **异常**
 
-- `CuiException` — MIME 类型非法，或 SDL 拒绝数据时。
+- `SdlException` — MIME 类型非法，或 SDL 拒绝数据时。
 
 ### clearData
 
@@ -169,7 +169,7 @@ public static func clearData(): Unit
 
 **异常**
 
-- `CuiException` — SDL 无法清空时。
+- `SdlException` — SDL 无法清空时。
 
 ### hasData
 
@@ -187,7 +187,7 @@ public static func hasData(mimeType: String): Bool
 
 **异常**
 
-- `CuiException` — `mimeType` 为空时。
+- `SdlException` — `mimeType` 为空时。
 
 ### getData
 
@@ -205,7 +205,7 @@ public static func getData(mimeType: String): ?Array<UInt8>
 
 **异常**
 
-- `CuiException` — `mimeType` 为空，或 SDL 无法复制其报告为可用的数据时。
+- `SdlException` — `mimeType` 为空，或 SDL 无法复制其报告为可用的数据时。
 
 ### mimeTypes
 

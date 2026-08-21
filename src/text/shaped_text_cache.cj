@@ -17,24 +17,25 @@ internal let SHAPED_TEXT_CACHE_CAP: Int64 = 512
  * generations while letting a hot key survive a rotation: a hit in the retired generation is promoted
  * back into active.
  *
- * `destroy` frees whatever a value owns (a native TTF_Text, say). The promote path removes the value
+ * Shared by the shaped-text cache (string keys) and the shape-mesh cache (packed Int64
+ * keys). `destroy` frees whatever a value owns (a native TTF_Text or a vertex buffer). The promote path removes the value
  * from the retired generation BEFORE re-inserting it, so a rotation triggered by that insert can never
  * destroy the value being handed back — the one native-lifetime hazard the two-generation scheme has.
  */
-internal class GenerationCache<T> {
+protected class GenerationCache<K, T> where K <: Hashable & Equatable<K> {
     private let capacity: Int64
     private let destroy: (T) -> Unit
-    private var active = HashMap<String, T>()
-    private var retired = HashMap<String, T>()
+    private var active = HashMap<K, T>()
+    private var retired = HashMap<K, T>()
 
-    init(capacity: Int64, destroy: (T) -> Unit) {
+    protected init(capacity: Int64, destroy: (T) -> Unit) {
         this.capacity = max(1, capacity)
         this.destroy = destroy
     }
 
     // The value for `key`, or None. A hit in the retired generation is promoted back to active so a
     // hot key is not dropped by the next rotation.
-    func get(key: String): ?T {
+    protected func get(key: K): ?T {
         match (active.get(key)) {
             case Some(value) => return Some(value)
             case None => ()
@@ -43,7 +44,7 @@ internal class GenerationCache<T> {
             case Some(value) =>
                 // Pull it out of retired first: the insert below may rotate, and rotation frees the
                 // retired generation — this value must not be in it when that happens.
-                let _ = retired.remove(key)
+                let _ = retired.remove(key) // cjcheck-ignore: ignore-result # entry was just read from retired; removal cannot miss
                 insert(key, value)
                 Some(value)
             case None => None
@@ -51,11 +52,11 @@ internal class GenerationCache<T> {
     }
 
     // Inserts a freshly created value. The caller is responsible for only calling this on a miss.
-    func put(key: String, value: T): Unit {
+    protected func put(key: K, value: T): Unit {
         insert(key, value)
     }
 
-    private func insert(key: String, value: T): Unit {
+    private func insert(key: K, value: T): Unit {
         if (active.size >= capacity) {
             rotate()
         }
@@ -75,7 +76,7 @@ internal class GenerationCache<T> {
     }
 
     // Frees every value and empties the cache. Call before discarding the owner.
-    func clear(): Unit {
+    protected func clear(): Unit {
         for ((_, value) in active) {
             destroy(value)
         }
@@ -87,7 +88,7 @@ internal class GenerationCache<T> {
     }
 
     // Total live entries across both generations — for tests and diagnostics.
-    func size(): Int64 {
+    protected func size(): Int64 {
         active.size + retired.size
     }
 }

@@ -47,7 +47,7 @@ public struct WindowSpec {
 /*
  * An SDL window paired with its `Renderer`, created together and closed together. `width`/`height`
  * and every event and drawing coordinate are logical pixels; `scale` maps them to window pixels.
- * The constructor initializes the video subsystem and starts text input, throwing `CuiException` on
+ * The constructor initializes the video subsystem and starts text input, throwing `SdlException` on
  * failure. `close()` is idempotent and releases the renderer, the window, and one video-subsystem
  * reference — SDL3 ref-counts subsystem init, so closing one window never tears the subsystem down
  * under another still-open window.
@@ -57,21 +57,35 @@ public class SdlWindow <: Resource {
     private let rendererPtr: CPointer<Unit>
     private var closed = false
 
-    public var width: Int32
-    public var height: Int32
+    private var widthValue: Int32
+    private var heightValue: Int32
     public let scale: Float32
+
+    /** Current window width in logical pixels; updated by `setSize`/`refreshSize`. */
+    public prop width: Int32 {
+        get() {
+            widthValue
+        }
+    }
+
+    /** Current window height in logical pixels; updated by `setSize`/`refreshSize`. */
+    public prop height: Int32 {
+        get() {
+            heightValue
+        }
+    }
     public let renderer: Renderer
 
     /**
-     * Throws `CuiException` when SDL cannot create or initialize the window, renderer, or text input.
+     * Throws `SdlException` when SDL cannot create or initialize the window, renderer, or text input.
      */
     public init(spec: WindowSpec) {
-        this.width = spec.width
-        this.height = spec.height
+        this.widthValue = spec.width
+        this.heightValue = spec.height
         this.scale = spec.scale
 
         if (!unsafe { SDL_Init(SDL_INIT_VIDEO) }) {
-            throw CuiException("SDL_Init failed: ${lastSdlError()}")
+            throw SdlException("SDL_Init failed: ${lastSdlError()}")
         }
 
         var flags = UInt64(0)
@@ -94,12 +108,12 @@ public class SdlWindow <: Resource {
             }
             if (!ok || window.isNull() || createdRenderer.isNull()) {
                 destroyCreatedResources(window, createdRenderer)
-                throw CuiException("SDL_CreateWindowAndRenderer failed: ${lastSdlError()}")
+                throw SdlException("SDL_CreateWindowAndRenderer failed: ${lastSdlError()}")
             }
             configureRenderer(window, createdRenderer, spec.scale, spec.vsync)
             if (!unsafe { SDL_StartTextInput(window) }) {
                 destroyCreatedResources(window, createdRenderer)
-                throw CuiException("SDL_StartTextInput failed: ${lastSdlError()}")
+                throw SdlException("SDL_StartTextInput failed: ${lastSdlError()}")
             }
         }
 
@@ -108,6 +122,7 @@ public class SdlWindow <: Resource {
         this.renderer = Renderer(createdRenderer, contentScale: spec.scale, supersample: spec.supersample)
     }
 
+    /** Sets the window title. Throws `SdlException` when SDL cannot apply it. */
     public func setTitle(title: String): Unit {
         let cTitle = unsafe { LibC.mallocCString(title) }
         try (titleResource = cTitle.asResource()) {
@@ -115,21 +130,30 @@ public class SdlWindow <: Resource {
         }
     }
 
+    /*
+     * Resizes the window to the given logical size, converting to window pixels via `scale`, and
+     * updates the cached `width`/`height`. Throws `SdlException` when SDL rejects the resize.
+     */
     public func setSize(width: Int32, height: Int32): Unit {
         let pixelWidth = scaledDimension(width, scale)
         let pixelHeight = scaledDimension(height, scale)
         ensureSdl(unsafe { SDL_SetWindowSize(windowPtr, pixelWidth, pixelHeight) }, "SDL_SetWindowSize")
-        this.width = width
-        this.height = height
+        this.widthValue = width
+        this.heightValue = height
     }
 
+    /*
+     * Re-reads the current window size from SDL (e.g. after a user resize), refreshes the cached
+     * `width`/`height` in logical pixels, and returns the logical size. Throws `SdlException`
+     * when SDL cannot report the size.
+     */
     public func refreshSize(): Size {
         var w: Int32 = 0
         var h: Int32 = 0
         ensureSdl(unsafe { SDL_GetWindowSize(windowPtr, inout w, inout h) }, "SDL_GetWindowSize")
-        width = Int32(Float32(w) / scale)
-        height = Int32(Float32(h) / scale)
-        Size(Float32(width), Float32(height))
+        widthValue = Int32(Float32(w) / scale)
+        heightValue = Int32(Float32(h) / scale)
+        Size(Float32(widthValue), Float32(heightValue))
     }
 
     /**
@@ -142,6 +166,10 @@ public class SdlWindow <: Resource {
         ensureSdl(unsafe { SDL_SetTextInputArea(windowPtr, inout raw, 0) }, "SDL_SetTextInputArea")
     }
 
+    /*
+     * Dequeues the next pending event, with coordinates already converted to logical pixels;
+     * returns `None` when the queue is empty. Non-blocking.
+     */
     public func pollEvent(): ?UiEvent {
         var raw = SdlEvent()
         if (!unsafe { SDL_PollEvent(inout raw) }) {
@@ -150,38 +178,44 @@ public class SdlWindow <: Resource {
         return Some(scaleEventCoordinates(decodeEvent(raw), scale))
     }
 
+    /** Milliseconds elapsed since SDL library initialization. */
     public func ticks(): UInt64 {
         unsafe { SDL_GetTicks() }
     }
 
+    /** Blocks the calling thread for at least `ms` milliseconds. */
     public func delay(ms: UInt32): Unit {
         unsafe { SDL_Delay(ms) }
     }
 
+    /** Whether `close()` has already been called on this window. */
     public func isClosed(): Bool {
         closed
     }
 
+    /*
+     * Releases the window's resources; idempotent — a second call returns immediately. Order:
+     * renderer resources, text input, the SDL renderer, the SDL window, then one video-subsystem
+     * reference (leaving other open windows' subsystem state intact).
+     */
     public func close(): Unit {
         if (closed) {
             return
         }
         closed = true
         renderer.releaseResources()
-        unsafe {
-            if (windowPtr.isNotNull()) {
-                let _ = SDL_StopTextInput(windowPtr)
-            }
-            if (rendererPtr.isNotNull()) {
-                SDL_DestroyRenderer(rendererPtr)
-            }
-            if (windowPtr.isNotNull()) {
-                SDL_DestroyWindow(windowPtr)
-            }
-            // Balances this window's SDL_Init. Subsystem init is ref-counted in SDL3, so with
-            // two live windows closing one must not tear down the video subsystem under the
-            // other — SDL_Quit() here would destroy every remaining window and renderer.
-            SDL_QuitSubSystem(SDL_INIT_VIDEO)
+        if (windowPtr.isNotNull()) {
+            let _ = unsafe { SDL_StopTextInput(windowPtr) } // cjcheck-ignore: ignore-result # shutdown path is best-effort: the resource is being destroyed regardless
         }
+        if (rendererPtr.isNotNull()) {
+            unsafe { SDL_DestroyRenderer(rendererPtr) }
+        }
+        if (windowPtr.isNotNull()) {
+            unsafe { SDL_DestroyWindow(windowPtr) }
+        }
+        // Balances this window's SDL_Init. Subsystem init is ref-counted in SDL3, so with
+        // two live windows closing one must not tear down the video subsystem under the
+        // other — SDL_Quit() here would destroy every remaining window and renderer.
+        unsafe { SDL_QuitSubSystem(SDL_INIT_VIDEO) }
     }
 }

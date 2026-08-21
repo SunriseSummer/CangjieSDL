@@ -1,6 +1,6 @@
 package sdl.system
 
-import sdl.{CuiException, lastSdlError}
+import sdl.{SdlException, lastSdlError}
 
 internal func dateFormatFromCode(code: Int32): DateFormat {
     if (code == SDL_DATE_FORMAT_YYYYMMDD) {
@@ -88,21 +88,21 @@ internal func dateTimeToRaw(parts: DateTimeParts): SdlDateTime {
 }
 
 /**
- * Throws `CuiException` when SDL reports a negative result.
+ * Throws `SdlException` when SDL reports a negative result.
  */
 internal func ensureNonNegative(value: Int32, api: String): Int32 {
     if (value < 0) {
-        throw CuiException("${api} failed: ${lastSdlError()}")
+        throw SdlException("${api} failed: ${lastSdlError()}")
     }
     value
 }
 
 /**
- * Throws `CuiException` when SDL reports an invalid weekday result.
+ * Throws `SdlException` when SDL reports an invalid weekday result.
  */
 internal func ensureWeekday(value: Int32, api: String): Weekday {
     match (weekdayFromCode(value)) {
         case Some(day) => day
-        case None => throw CuiException("${api} failed: ${lastSdlError()}")
+        case None => throw SdlException("${api} failed: ${lastSdlError()}")
     }
 }

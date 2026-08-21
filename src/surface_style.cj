@@ -1,5 +1,10 @@
 package sdl
 
+/**
+ * The visual recipe for a rounded panel: fill and border colors, corner radius, border width,
+ * and a drop shadow (color plus vertical offset). Border and shadow default to fully
+ * transparent, so a bare fill is the minimal style; the `with*` helpers derive variants.
+ */
 public struct SurfaceStyle {
     public let fill: Color
     public let border: Color
@@ -24,6 +29,7 @@ public struct SurfaceStyle {
         this.shadowOffsetY = shadowOffsetY
     }
 
+    /** A copy of this style with a different fill color; everything else is unchanged. */
     public func withFill(fill: Color): SurfaceStyle {
         SurfaceStyle(
             fill,
@@ -35,6 +41,7 @@ public struct SurfaceStyle {
         )
     }
 
+    /** A copy of this style with a different border color; everything else is unchanged. */
     public func withBorder(border: Color): SurfaceStyle {
         SurfaceStyle(
             fill,

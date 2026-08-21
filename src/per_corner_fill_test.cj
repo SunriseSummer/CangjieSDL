@@ -3,7 +3,7 @@ package sdl
 // Exercises the per-corner rounded-rect fill path (independent corner arcs + fillPath) on a window
 // renderer across corner mixes and degenerate inputs. Pixel correctness is verified by example snapshots.
 @Test
-func fillsPerCornerRoundedRectWithoutError(): Unit {
+func fillsPerCornerRoundedRectWithoutError(): Unit { // cjcheck-ignore: smoke-test # deliberate reach-the-end smoke test: pixel output cannot be asserted headlessly; correctness is covered by example snapshots
     let window = SdlWindow(WindowSpec("Per-corner fill test", 220, 150))
     try {
         let renderer = window.renderer
@@ -20,8 +20,8 @@ func fillsPerCornerRoundedRectWithoutError(): Unit {
         renderer.fillPerCornerRoundedRect(box, fill, topLeft: 999.0, topRight: 999.0, bottomRight: 999.0,
             bottomLeft: 999.0)
         // A degenerate zero-size rect is a safe no-op.
-        renderer.fillPerCornerRoundedRect(Rect(0.0, 0.0, 0.0, 0.0), fill, topLeft: 4.0, topRight: 4.0,
-            bottomRight: 4.0, bottomLeft: 4.0)
+        renderer.fillPerCornerRoundedRect(Rect(0.0, 0.0, 0.0, 0.0), fill, topLeft: 4.0, topRight: 4.0, bottomRight: 4.0,
+            bottomLeft: 4.0)
         renderer.endScene()
         renderer.present()
         @Expect(true) // reached here without a native draw exception

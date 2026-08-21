@@ -87,14 +87,16 @@ protected class NativeTextRenderer {
             defaultFace.fontFor(DEFAULT_POINT_SIZE, 0)
         } catch (error: NativeTextException) {
             defaultFace.close()
-            unsafe {
-                TTF_DestroyRendererTextEngine(engine)
-                TTF_Quit()
-            }
+            unsafe { TTF_DestroyRendererTextEngine(engine) }
+            unsafe { TTF_Quit() }
             throw error
         }
     }
 
+    /**
+     * Measures `text` at the given size and style via TTF_GetStringSize, returning width and
+     * height in pixels. Throws `NativeTextException` when SDL_ttf cannot measure the string.
+     */
     public func measure(text: String, pointSize: Float32, styleFlags: Int32, facePath: String): NativeTextMetrics {
         let font = fontForPath(facePath, pointSize, styleFlags)
         let cText = unsafe { LibC.mallocCString(text) }
@@ -135,6 +137,11 @@ protected class NativeTextRenderer {
         surface
     }
 
+    /**
+     * Draws `text` at (`x`, `y`) in target pixels through the renderer text engine, reusing the
+     * cached shaped-text object for an unchanged string; empty text is a no-op. Throws
+     * `NativeTextException` when SDL_ttf cannot shape or draw the string.
+     */
     public func draw(
         text: String,
         x: Float32,
@@ -191,6 +198,7 @@ protected class NativeTextRenderer {
         total
     }
 
+    /** Zeroes the shaping counters on every face; call at a frame boundary to sample one frame. */
     public func resetShapeCount(): Unit {
         defaultFace.resetShapeCount()
         for ((_, face) in faces) {
@@ -198,6 +206,7 @@ protected class NativeTextRenderer {
         }
     }
 
+    /** The default face's font family name, or "System UI" when SDL_ttf reports none. */
     public func familyName(): String {
         let name = defaultFace.familyName()
         if (name.isEmpty()) {
@@ -207,10 +216,15 @@ protected class NativeTextRenderer {
         }
     }
 
+    /** The file path of the system font the default face was opened from. */
     public func path(): String {
         systemPath
     }
 
+    /**
+     * Closes every open face, destroys the text engine, and shuts down SDL_ttf; safe to call
+     * more than once.
+     */
     public func close(): Unit {
         if (closed) {
             return
@@ -221,10 +235,8 @@ protected class NativeTextRenderer {
             face.close()
         }
         faces.clear()
-        unsafe {
-            TTF_DestroyRendererTextEngine(engine)
-            TTF_Quit()
-        }
+        unsafe { TTF_DestroyRendererTextEngine(engine) }
+        unsafe { TTF_Quit() }
     }
 
     // The face for a font-file path: empty selects the default system face; a path opens (and caches)
@@ -308,7 +320,7 @@ private class FontFace {
             if (let Some(boldFile) <- boldCompanion()) {
                 try {
                     return openFont(boldFile, pointSize, styleFlags, styleFlags & STYLE_NON_BOLD_MASK)
-                } catch (_: NativeTextException) {
+                } catch (_: NativeTextException) { // cjcheck-ignore: swallow-catch # recovery is the fall-through: the return above is skipped and the base file opens in faux bold below
                     // Degrade like every other font failure: the base file still renders, in faux bold.
                 }
             }
@@ -391,7 +403,7 @@ private class NativeFont {
     private var engine = CPointer<Unit>()
     // Already-shaped text objects for this size, reused across frames; a miss is the only path that
     // shapes a string. Bounded and self-freeing: an evicted object's TTF_Text is destroyed.
-    private let cache: GenerationCache<ShapedText>
+    private let cache: GenerationCache<String, ShapedText>
     // Shaped-text cache misses (real TTF_CreateText calls) since the last reset. No access modifier
     // so the renderer can total it as a per-frame text-cost probe.
     var shapeCount: UInt64 = 0
@@ -407,7 +419,7 @@ private class NativeFont {
         if (syntheticFlags != 0) {
             unsafe { TTF_SetFontStyle(font, syntheticFlags) }
         }
-        this.cache = GenerationCache<ShapedText>(SHAPED_TEXT_CACHE_CAP) {
+        this.cache = GenerationCache<String, ShapedText>(SHAPED_TEXT_CACHE_CAP) {
             shaped => if (shaped.pointer.isNotNull()) {
                 unsafe { TTF_DestroyText(shaped.pointer) }
             }

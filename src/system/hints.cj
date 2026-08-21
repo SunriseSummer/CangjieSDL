@@ -1,11 +1,13 @@
 package sdl.system
 
+/** Controls whether a hint value uses defaults, normal precedence, or overrides existing values. */
 public enum HintPriority {
     | Default
     | Normal
     | Override
 }
 
+/** Identifies a well-known SDL configuration hint; `CustomHint` addresses a hint by raw name. */
 public enum SdlHint {
     | AppId
     | AppName
@@ -20,6 +22,7 @@ public enum SdlHint {
     | CustomHint(String)
 }
 
+/** Bundles a hint, its value, and the priority to apply it with. */
 public struct SdlHintSetting {
     public let hint: SdlHint
     public let value: String
@@ -32,23 +35,24 @@ public struct SdlHintSetting {
     }
 }
 
+/** Sets, queries, and resets SDL configuration hints. */
 public class SdlHints {
     /**
-     * Throws `CuiException` when SDL rejects the hint.
+     * Throws `SdlException` when SDL rejects the hint.
      */
     public static func set(hint: SdlHint, value: String): Unit {
         withHintStrings(hint, value, HintPriority.Normal)
     }
 
     /**
-     * Throws `CuiException` when SDL rejects the hint.
+     * Throws `SdlException` when SDL rejects the hint.
      */
     public static func set(setting: SdlHintSetting): Unit {
         withHintStrings(setting.hint, setting.value, setting.priority)
     }
 
     /**
-     * Throws `CuiException` when SDL rejects the hint.
+     * Throws `SdlException` when SDL rejects the hint.
      */
     public static func setBool(
         hint: SdlHint,
@@ -59,7 +63,7 @@ public class SdlHints {
     }
 
     /**
-     * Throws `CuiException` when SDL rejects one of the hints.
+     * Throws `SdlException` when SDL rejects one of the hints.
      */
     public static func apply(settings: Array<SdlHintSetting>): Unit {
         for (setting in settings) {
@@ -68,7 +72,7 @@ public class SdlHints {
     }
 
     /**
-     * Throws `CuiException` when the hint name is empty.
+     * Throws `SdlException` when the hint name is empty.
      */
     public static func get(hint: SdlHint): ?String {
         let cName = unsafe { LibC.mallocCString(checkedHintName(hint)) }
@@ -85,7 +89,7 @@ public class SdlHints {
     }
 
     /**
-     * Throws `CuiException` when the hint name is empty.
+     * Throws `SdlException` when the hint name is empty.
      */
     public static func getBool(hint: SdlHint, defaultValue: Bool): Bool {
         let cName = unsafe { LibC.mallocCString(checkedHintName(hint)) }
@@ -108,6 +112,7 @@ public class SdlHints {
         changed
     }
 
+    /** Resets every hint to its default value. */
     public static func resetAll(): Unit {
         unsafe { SDL_ResetHints() }
     }

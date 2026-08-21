@@ -4,7 +4,7 @@
 
 `sdl.system` 包中的 public class
 
-应用元数据的写入与查询入口。元数据供操作系统在任务管理器、音量面板等处显示应用信息；在创建窗口之前设置。SDL 无法写入、更新或移除元数据时，方法把失败状态转换为 `CuiException`。
+应用元数据的写入与查询入口。元数据供操作系统在任务管理器、音量面板等处显示应用信息；在创建窗口之前设置。SDL 无法写入、更新或移除元数据时，方法把失败状态转换为 `SdlException`。
 
 ## 声明
 
@@ -76,7 +76,7 @@ public static func apply(metadata: AppMetadata): Unit
 
 **异常**
 
-- `CuiException` — SDL 无法应用元数据时。
+- `SdlException` — SDL 无法应用元数据时。
 
 ### set
 
@@ -93,7 +93,7 @@ public static func set(property: AppMetadataProperty, value: String): Unit
 
 **异常**
 
-- `CuiException` — 属性名为空，或 SDL 无法设置时。
+- `SdlException` — 属性名为空，或 SDL 无法设置时。
 
 ### remove
 
@@ -109,7 +109,7 @@ public static func remove(property: AppMetadataProperty): Unit
 
 **异常**
 
-- `CuiException` — 属性名为空，或 SDL 无法移除时。
+- `SdlException` — 属性名为空，或 SDL 无法移除时。
 
 ### get
 
@@ -127,7 +127,7 @@ public static func get(property: AppMetadataProperty): ?String
 
 **异常**
 
-- `CuiException` — 属性名为空时。
+- `SdlException` — 属性名为空时。
 
 ## 另请参阅
 

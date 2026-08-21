@@ -45,7 +45,7 @@ main(): Unit {
 | [`VideoAllowScreensaver`](#videoallowscreensaver) | 是否允许屏保运行（SDL 默认阻止）。 |
 | [`VideoDriver`](#videodriver) | 视频后端选择。 |
 | [`WindowsCloseOnAltF4`](#windowscloseonaltf4) | Windows 上 Alt+F4 是否关闭窗口。 |
-| [`CustomHint(String)`](#customhint) | 任意 hint，携带完整 SDL hint 名（如 `"SDL_RENDER_DRIVER"`）；空名在读写时抛 `CuiException`。 |
+| [`CustomHint(String)`](#customhint) | 任意 hint，携带完整 SDL hint 名（如 `"SDL_RENDER_DRIVER"`）；空名在读写时抛 `SdlException`。 |
 
 ## 枚举值
 
@@ -131,7 +131,7 @@ WindowsCloseOnAltF4
 
 ### CustomHint
 
-任意 hint，携带完整 SDL hint 名（如 `"SDL_RENDER_DRIVER"`）；空名在读写时抛 `CuiException`。
+任意 hint，携带完整 SDL hint 名（如 `"SDL_RENDER_DRIVER"`）；空名在读写时抛 `SdlException`。
 
 ```cangjie
 CustomHint(String)

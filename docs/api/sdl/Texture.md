@@ -18,9 +18,9 @@ public class Texture <: Resource
 
 ## 说明
 
-关闭后的纹理再调用设置方法抛出 `CuiException`；把关闭的纹理交给渲染器绘制同样抛出。宽高在创建时查询一次并缓存为字段，读取不触发 SDL 调用。
+关闭后的纹理再调用设置方法抛出 `SdlException`；把关闭的纹理交给渲染器绘制同样抛出。宽高在创建时查询一次并缓存为字段，读取不触发 SDL 调用。
 
-纹理仍有效但 SDL 拒绝颜色、不透明度或混合模式设置时，方法把失败状态转换为 `CuiException`。
+纹理仍有效但 SDL 拒绝颜色、不透明度或混合模式设置时，方法把失败状态转换为 `SdlException`。
 
 ## 示例
 
@@ -129,7 +129,7 @@ public func setColorMod(color: Color): Unit
 
 **异常**
 
-- `CuiException` — 纹理已关闭，或 SDL 拒绝设置时。
+- `SdlException` — 纹理已关闭，或 SDL 拒绝设置时。
 
 ### setAlpha
 
@@ -145,7 +145,7 @@ public func setAlpha(alpha: Int64): Unit
 
 **异常**
 
-- `CuiException` — 纹理已关闭，或 SDL 拒绝设置时。
+- `SdlException` — 纹理已关闭，或 SDL 拒绝设置时。
 
 ### setBlendMode
 
@@ -161,7 +161,7 @@ public func setBlendMode(mode: TextureBlendMode): Unit
 
 **异常**
 
-- `CuiException` — 纹理已关闭，或 SDL 拒绝设置时。
+- `SdlException` — 纹理已关闭，或 SDL 拒绝设置时。
 
 ### isClosed
 

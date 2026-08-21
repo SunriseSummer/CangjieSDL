@@ -4,7 +4,7 @@
 
 `sdl.system` 包中的 public class
 
-系统实时钟与日历换算：读取当前时间（1970-01-01 UTC 起算的纳秒），在纳秒时间戳与 [`DateTimeParts`](DateTimeParts.md) 之间互转，查询每月天数、一年中的第几天和星期，以及与 Windows FILETIME 互转。单调计时见 [`PerformanceClock`](PerformanceClock.md)。SDL 无法读取时钟、换算日历字段或返回有效日历结果时，方法把失败状态转换为 `CuiException`。
+系统实时钟与日历换算：读取当前时间（1970-01-01 UTC 起算的纳秒），在纳秒时间戳与 [`DateTimeParts`](DateTimeParts.md) 之间互转，查询每月天数、一年中的第几天和星期，以及与 Windows FILETIME 互转。单调计时见 [`PerformanceClock`](PerformanceClock.md)。SDL 无法读取时钟、换算日历字段或返回有效日历结果时，方法把失败状态转换为 `SdlException`。
 
 ## 声明
 
@@ -78,7 +78,7 @@ public static func currentNanoseconds(): Int64
 
 **异常**
 
-- `CuiException` — SDL 无法读取实时钟时。
+- `SdlException` — SDL 无法读取实时钟时。
 
 ### currentDateTime
 
@@ -96,7 +96,7 @@ public static func currentDateTime(local!: Bool = true): DateTimeParts
 
 **异常**
 
-- `CuiException` — SDL 无法读取或换算时。
+- `SdlException` — SDL 无法读取或换算时。
 
 ### toDateTime
 
@@ -115,7 +115,7 @@ public static func toDateTime(nanoseconds: Int64, local!: Bool = true): DateTime
 
 **异常**
 
-- `CuiException` — SDL 无法换算时。
+- `SdlException` — SDL 无法换算时。
 
 ### toNanoseconds
 
@@ -133,7 +133,7 @@ public static func toNanoseconds(parts: DateTimeParts): Int64
 
 **异常**
 
-- `CuiException` — 字段无法构成合法时间时。
+- `SdlException` — 字段无法构成合法时间时。
 
 ### toWindowsFileTime
 
@@ -180,7 +180,7 @@ public static func daysInMonth(year: Int32, month: Int32): Int32
 
 **异常**
 
-- `CuiException` — 年/月非法时。
+- `SdlException` — 年/月非法时。
 
 ### dayOfYear
 
@@ -198,7 +198,7 @@ public static func dayOfYear(year: Int32, month: Int32, day: Int32): Int32
 
 **异常**
 
-- `CuiException` — 日期非法时。
+- `SdlException` — 日期非法时。
 
 ### dayOfWeek
 
@@ -216,7 +216,7 @@ public static func dayOfWeek(year: Int32, month: Int32, day: Int32): Weekday
 
 **异常**
 
-- `CuiException` — 日期非法时。
+- `SdlException` — 日期非法时。
 
 ### localePreferences
 
@@ -230,7 +230,7 @@ public static func localePreferences(): DateTimeLocalePreferences
 
 **异常**
 
-- `CuiException` — SDL 无法查询区域偏好时。
+- `SdlException` — SDL 无法查询区域偏好时。
 
 ## 另请参阅
 

@@ -1,7 +1,8 @@
 package sdl.displays
 
-import sdl.{CuiException, ensureSdl, lastSdlError, Rect, SDL_INIT_VIDEO, SdlDisplayMode, SdlRect}
+import sdl.{SdlException, ensureSdl, lastSdlError, normalizedScale, Rect, SDL_INIT_VIDEO, SdlDisplayMode, SdlRect}
 
+/** The physical rotation of a display panel relative to its natural orientation. */
 public enum DisplayOrientation {
     | Unknown
     | Landscape
@@ -10,6 +11,7 @@ public enum DisplayOrientation {
     | PortraitFlipped
 }
 
+/** One video mode of a display: pixel size, pixel density, and refresh rate. */
 public struct DisplayMode {
     public let width: Int32
     public let height: Int32
@@ -24,6 +26,7 @@ public struct DisplayMode {
     }
 }
 
+/** A display's placement on the desktop: full bounds, usable bounds (minus taskbars/docks), and content scale. */
 public struct DisplayGeometry {
     public let bounds: Rect
     public let usableBounds: Rect
@@ -36,6 +39,7 @@ public struct DisplayGeometry {
     }
 }
 
+/** A display's natural (hardware) orientation together with the orientation it is currently rotated to. */
 public struct DisplayOrientations {
     public let natural: DisplayOrientation
     public let current: DisplayOrientation
@@ -46,6 +50,7 @@ public struct DisplayOrientations {
     }
 }
 
+/** A display's desktop mode and currently active mode; either is `None` when SDL cannot report it. */
 public struct DisplayModes {
     public let desktop: ?DisplayMode
     public let current: ?DisplayMode
@@ -56,6 +61,7 @@ public struct DisplayModes {
     }
 }
 
+/** A snapshot of one connected display: id, name, geometry, orientations, and modes. */
 public struct DisplayInfo {
     public let id: UInt32
     public let name: String
@@ -79,19 +85,19 @@ public struct DisplayInfo {
 }
 
 /**
- * Throws `CuiException` when SDL cannot initialize video or query the primary display.
+ * Throws `SdlException` when SDL cannot initialize video or query the primary display.
  */
 public func primaryDisplayInfo(): DisplayInfo {
     ensureVideo()
     let id = unsafe { SDL_GetPrimaryDisplay() }
     if (id == UInt32(0)) {
-        throw CuiException("SDL_GetPrimaryDisplay failed: ${lastSdlError()}")
+        throw SdlException("SDL_GetPrimaryDisplay failed: ${lastSdlError()}")
     }
     displayInfo(id)
 }
 
 /**
- * Throws `CuiException` when SDL cannot query the requested display.
+ * Throws `SdlException` when SDL cannot query the requested display.
  */
 public func displayInfo(id: UInt32): DisplayInfo {
     ensureDisplayId(id)
@@ -125,7 +131,7 @@ internal func displayOrientationFromCode(code: Int32): DisplayOrientation {
 }
 
 internal func displayModeFromRaw(raw: SdlDisplayMode): DisplayMode {
-    DisplayMode(raw.w, raw.h, normalizedDisplayScale(raw.pixelDensity), raw.refreshRate)
+    DisplayMode(raw.w, raw.h, normalizedScale(raw.pixelDensity), raw.refreshRate)
 }
 
 private func ensureVideo(): Unit {
@@ -133,12 +139,12 @@ private func ensureVideo(): Unit {
 }
 
 /**
- * Throws `CuiException` when SDL cannot resolve the display name.
+ * Throws `SdlException` when SDL cannot resolve the display name.
  */
 private func displayName(id: UInt32): String {
     let name = unsafe { SDL_GetDisplayName(id) }
     if (name.isNull()) {
-        throw CuiException("SDL_GetDisplayName failed: ${lastSdlError()}")
+        throw SdlException("SDL_GetDisplayName failed: ${lastSdlError()}")
     }
     name.toString()
 }
@@ -156,12 +162,12 @@ private func displayUsableBounds(id: UInt32): Rect {
 }
 
 /**
- * Throws `CuiException` when SDL cannot resolve the display scale.
+ * Throws `SdlException` when SDL cannot resolve the display scale.
  */
 private func displayContentScale(id: UInt32): Float32 {
     let scale = unsafe { SDL_GetDisplayContentScale(id) }
     if (scale <= 0.0) {
-        throw CuiException("SDL_GetDisplayContentScale failed: ${lastSdlError()}")
+        throw SdlException("SDL_GetDisplayContentScale failed: ${lastSdlError()}")
     }
     scale
 }
@@ -175,12 +181,4 @@ internal func displayModeFromPointer(mode: CPointer<SdlDisplayMode>): ?DisplayMo
 
 private func rectFromRaw(raw: SdlRect): Rect {
     Rect(Float32(raw.x), Float32(raw.y), Float32(raw.w), Float32(raw.h))
-}
-
-private func normalizedDisplayScale(scale: Float32): Float32 {
-    if (scale <= 0.0) {
-        1.0
-    } else {
-        scale
-    }
 }

@@ -3,7 +3,7 @@ package sdl
 // Exercises the dashed rounded-rect stroke path (perimeter march + per-dash strokeSegment) on a window
 // renderer across radii and the solid fallback. Pixel correctness is verified by example snapshots.
 @Test
-func strokesDashedRoundedRectWithoutError(): Unit {
+func strokesDashedRoundedRectWithoutError(): Unit { // cjcheck-ignore: smoke-test # deliberate reach-the-end smoke test: pixel output cannot be asserted headlessly; correctness is covered by example snapshots
     let window = SdlWindow(WindowSpec("Dashed border test", 220, 150))
     try {
         let renderer = window.renderer

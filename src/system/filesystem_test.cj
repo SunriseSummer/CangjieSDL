@@ -2,10 +2,10 @@ package sdl.system
 
 import std.fs.File
 import std.fs.Path
-import sdl.CuiException
+import sdl.SdlException
 
 @Test
-func entryTypeFromCodeMapsSdlValues(): Unit {
+func entryTypeFromCodeMapsSdlValues(): Unit { // cjcheck-ignore: smoke-test # assertions live in the expect* helpers this test calls; each ends in @Expect/@Fail
     expectMissingEntry(entryTypeFromCode(SDL_PATHTYPE_NONE))
     expectFileEntry(entryTypeFromCode(SDL_PATHTYPE_FILE))
     expectDirectoryEntry(entryTypeFromCode(SDL_PATHTYPE_DIRECTORY))
@@ -100,7 +100,7 @@ private func filesystemPathInfoFails(path: String): Bool {
     try {
         let _ = FileSystem.pathInfo(path)
         false
-    } catch (e: CuiException) {
+    } catch (e: SdlException) {
         true
     }
 }
@@ -109,7 +109,7 @@ private func filesystemCreateDirectoryFails(path: String): Bool {
     try {
         FileSystem.createDirectory(path)
         false
-    } catch (e: CuiException) {
+    } catch (e: SdlException) {
         true
     }
 }
@@ -118,7 +118,7 @@ private func filesystemGlobDirectoryFails(path: String): Bool {
     try {
         let _ = FileSystem.globDirectory(path)
         false
-    } catch (e: CuiException) {
+    } catch (e: SdlException) {
         true
     }
 }
@@ -143,7 +143,7 @@ private func removeFixturePath(path: String): Unit {
         if (FileSystem.exists(path)) {
             FileSystem.remove(path)
         }
-    } catch (e: CuiException) {
+    } catch (_: SdlException) { // cjcheck-ignore: swallow-catch # best-effort fixture cleanup: a leftover temp file must not fail the test that already ran
         ()
     }
 }

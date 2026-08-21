@@ -2,6 +2,7 @@ package sdl.system
 
 import sdl.ensureSdl
 
+/** Describes the field order a locale prefers when formatting dates. */
 public enum DateFormat {
     | YearMonthDay
     | DayMonthYear
@@ -9,12 +10,14 @@ public enum DateFormat {
     | UnknownDateFormat(Int32)
 }
 
+/** Describes whether a locale prefers 24-hour or 12-hour clock display. */
 public enum ClockFormat {
     | TwentyFourHour
     | TwelveHour
     | UnknownClockFormat(Int32)
 }
 
+/** Identifies a day of the week, Sunday through Saturday. */
 public enum Weekday {
     | Sunday
     | Monday
@@ -25,6 +28,7 @@ public enum Weekday {
     | Saturday
 }
 
+/** Reports the date and clock formats the current locale prefers. */
 public struct DateTimeLocalePreferences {
     public let dateFormat: DateFormat
     public let clockFormat: ClockFormat
@@ -35,6 +39,7 @@ public struct DateTimeLocalePreferences {
     }
 }
 
+/** Holds the low and high 32-bit halves of a Windows FILETIME value. */
 public struct WindowsFileTime {
     public let low: UInt32
     public let high: UInt32
@@ -45,6 +50,7 @@ public struct WindowsFileTime {
     }
 }
 
+/** Represents a calendar date and time broken into fields, with an optional weekday and a UTC offset. */
 public struct DateTimeParts {
     public var year: Int32 = 1970
     public var month: Int32 = 1
@@ -57,9 +63,10 @@ public struct DateTimeParts {
     public var utcOffsetSeconds: Int32 = 0
 }
 
+/** Queries the realtime clock and converts between nanosecond timestamps and calendar representations. */
 public class Time {
     /**
-     * Throws `CuiException` when SDL cannot query the system realtime clock.
+     * Throws `SdlException` when SDL cannot query the system realtime clock.
      */
     public static func currentNanoseconds(): Int64 {
         var ticks: Int64 = 0
@@ -68,14 +75,14 @@ public class Time {
     }
 
     /**
-     * Throws `CuiException` when SDL cannot query or convert the system realtime clock.
+     * Throws `SdlException` when SDL cannot query or convert the system realtime clock.
      */
     public static func currentDateTime(local!: Bool = true): DateTimeParts {
         toDateTime(currentNanoseconds(), local: local)
     }
 
     /**
-     * Throws `CuiException` when SDL cannot convert nanoseconds to calendar fields.
+     * Throws `SdlException` when SDL cannot convert nanoseconds to calendar fields.
      */
     public static func toDateTime(nanoseconds: Int64, local!: Bool = true): DateTimeParts {
         var raw = SdlDateTime()
@@ -84,7 +91,7 @@ public class Time {
     }
 
     /**
-     * Throws `CuiException` when SDL cannot convert calendar fields to nanoseconds.
+     * Throws `SdlException` when SDL cannot convert calendar fields to nanoseconds.
      */
     public static func toNanoseconds(parts: DateTimeParts): Int64 {
         var raw = dateTimeToRaw(parts)
@@ -93,6 +100,7 @@ public class Time {
         ticks
     }
 
+    /** Converts a nanosecond timestamp to a Windows FILETIME value. */
     public static func toWindowsFileTime(nanoseconds: Int64): WindowsFileTime {
         var low: UInt32 = UInt32(0)
         var high: UInt32 = UInt32(0)
@@ -100,12 +108,13 @@ public class Time {
         WindowsFileTime(low, high)
     }
 
+    /** Converts a Windows FILETIME value to a nanosecond timestamp. */
     public static func fromWindowsFileTime(fileTime: WindowsFileTime): Int64 {
         unsafe { SDL_TimeFromWindows(fileTime.low, fileTime.high) }
     }
 
     /**
-     * Throws `CuiException` when the requested year/month is invalid.
+     * Throws `SdlException` when the requested year/month is invalid.
      */
     public static func daysInMonth(year: Int32, month: Int32): Int32 {
         let days = unsafe { SDL_GetDaysInMonth(year, month) }
@@ -113,7 +122,7 @@ public class Time {
     }
 
     /**
-     * Throws `CuiException` when the requested date is invalid.
+     * Throws `SdlException` when the requested date is invalid.
      */
     public static func dayOfYear(year: Int32, month: Int32, day: Int32): Int32 {
         let dayIndex = unsafe { SDL_GetDayOfYear(year, month, day) }
@@ -121,7 +130,7 @@ public class Time {
     }
 
     /**
-     * Throws `CuiException` when the requested date is invalid.
+     * Throws `SdlException` when the requested date is invalid.
      */
     public static func dayOfWeek(year: Int32, month: Int32, day: Int32): Weekday {
         let dayIndex = unsafe { SDL_GetDayOfWeek(year, month, day) }
@@ -129,7 +138,7 @@ public class Time {
     }
 
     /**
-     * Throws `CuiException` when SDL cannot query locale date/time preferences.
+     * Throws `SdlException` when SDL cannot query locale date/time preferences.
      */
     public static func localePreferences(): DateTimeLocalePreferences {
         var dateFormat: Int32 = 0

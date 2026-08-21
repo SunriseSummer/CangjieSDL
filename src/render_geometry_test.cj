@@ -1,6 +1,7 @@
 package sdl
 
 import std.collection.ArrayList
+import sdl.text.GenerationCache
 
 // A mesh with null native buffers: the two-generation eviction bookkeeping — including the
 // promote-safety hazard where a hit in the retired generation must not be freed by the rotation its
@@ -29,7 +30,7 @@ func meshKeyFieldsStayWithinBudgetAtBoundaries(): Unit {
 @Test
 func meshCachePromotesHotKeyPastRotation(): Unit {
     let destroyed = ArrayList<CachedMesh>()
-    let cache = MeshCache(2) {mesh => destroyed.add(mesh)}
+    let cache = GenerationCache<Int64, CachedMesh>(2) {mesh => destroyed.add(mesh)}
     let a = fakeMesh()
     let b = fakeMesh()
     let c = fakeMesh()
@@ -60,7 +61,7 @@ func meshCachePromotesHotKeyPastRotation(): Unit {
 @Test
 func meshCacheDestroysEveryMeshExactlyOnce(): Unit {
     let destroyed = ArrayList<CachedMesh>()
-    let cache = MeshCache(2) {mesh => destroyed.add(mesh)}
+    let cache = GenerationCache<Int64, CachedMesh>(2) {mesh => destroyed.add(mesh)}
     let meshes = ArrayList<CachedMesh>()
     var i = 1
     while (i <= 7) {
@@ -69,7 +70,7 @@ func meshCacheDestroysEveryMeshExactlyOnce(): Unit {
         cache.put(Int64(i), mesh)
         i += 1
     }
-    cache.freeAll()
+    cache.clear()
     // All seven created, each destroyed exactly once — no leak (a missing mesh) and no double free.
     @Expect(destroyed.size, 7)
     for (mesh in meshes) {

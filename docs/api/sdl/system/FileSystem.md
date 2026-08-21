@@ -4,7 +4,7 @@
 
 `sdl.system` 包中的 public class
 
-SDL 文件系统操作的入口：建目录、删除、改名、复制、查询，以及按通配模式列出目录。全部方法先拒绝空路径；写操作和目录枚举会把 SDL 失败转换为 `CuiException`。`pathInfo` 无法区分“路径不存在”和底层查询失败，两者都返回 `None`；`exists` 相应返回 `false`。
+SDL 文件系统操作的入口：建目录、删除、改名、复制、查询，以及按通配模式列出目录。全部方法先拒绝空路径；写操作和目录枚举会把 SDL 失败转换为 `SdlException`。`pathInfo` 无法区分“路径不存在”和底层查询失败，两者都返回 `None`；`exists` 相应返回 `false`。
 
 ## 声明
 
@@ -79,7 +79,7 @@ public static func createDirectory(path: String): Unit
 
 **异常**
 
-- `CuiException` — 路径为空，或 SDL 无法创建目录树时。
+- `SdlException` — 路径为空，或 SDL 无法创建目录树时。
 
 ### remove
 
@@ -95,7 +95,7 @@ public static func remove(path: String): Unit
 
 **异常**
 
-- `CuiException` — 路径为空，或 SDL 无法删除（如目录非空）时。
+- `SdlException` — 路径为空，或 SDL 无法删除（如目录非空）时。
 
 ### rename
 
@@ -112,7 +112,7 @@ public static func rename(oldPath: String, newPath: String): Unit
 
 **异常**
 
-- `CuiException` — 任一路径为空，或 SDL 无法改名时。
+- `SdlException` — 任一路径为空，或 SDL 无法改名时。
 
 ### copyFile
 
@@ -129,7 +129,7 @@ public static func copyFile(source: String, destination: String): Unit
 
 **异常**
 
-- `CuiException` — 任一路径为空，或 SDL 无法复制时。
+- `SdlException` — 任一路径为空，或 SDL 无法复制时。
 
 ### pathInfo
 
@@ -147,7 +147,7 @@ public static func pathInfo(path: String): ?PathInfo
 
 **异常**
 
-- `CuiException` — 路径为空时。
+- `SdlException` — 路径为空时。
 
 ### exists
 
@@ -165,7 +165,7 @@ public static func exists(path: String): Bool
 
 **异常**
 
-- `CuiException` — 路径为空时。
+- `SdlException` — 路径为空时。
 
 ### globDirectory
 
@@ -185,7 +185,7 @@ public static func globDirectory(path: String, pattern!: ?String = None, caseIns
 
 **异常**
 
-- `CuiException` — 路径为空，或 SDL 无法枚举目录时。
+- `SdlException` — 路径为空，或 SDL 无法枚举目录时。
 
 ## 另请参阅
 
