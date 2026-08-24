@@ -16,6 +16,19 @@ func textureRenderOptionsKeepExplicitFlip(): Unit {
     @Expect(isHorizontalFlip(options.flip))
 }
 
+@Test
+func textureBecomesClosedWhenItsRendererIsDestroyed(): Unit {
+    let window = SdlWindow(WindowSpec("Texture owner lifetime", 120, 80, supersample: 1))
+    let surface = Surface.create(2, 2)
+    let texture = window.renderer.textureFromSurface(surface)
+    surface.close()
+
+    window.close()
+
+    @Expect(texture.isClosed())
+    texture.close() // renderer destruction already freed the native texture; this must not double-free
+}
+
 private func isNoSource(source: ?Rect): Bool {
     match (source) {
         case None => true

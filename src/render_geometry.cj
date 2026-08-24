@@ -725,9 +725,9 @@ internal class GeometryBatch {
             unsafe { verts.write(i, vertex) }
             i += 1
         }
-        let _ = unsafe { // cjcheck-ignore: ignore-result # per-frame draw call: dropping one primitive beats aborting the frame; SDL keeps the error for diagnosis
+        ensureSdl(unsafe {
             SDL_RenderGeometry(renderer, CPointer<Unit>(), verts, Int32(vc), mesh.indices, Int32(ic))
-        }
+        }, "SDL_RenderGeometry")
     }
 
     // Emits a cached fill mesh translated by (dx, dy) with a linear gradient: each vertex is coloured by
@@ -759,9 +759,9 @@ internal class GeometryBatch {
             unsafe { verts.write(i, vertex) }
             i += 1
         }
-        let _ = unsafe { // cjcheck-ignore: ignore-result # per-frame draw call: dropping one primitive beats aborting the frame; SDL keeps the error for diagnosis
+        ensureSdl(unsafe {
             SDL_RenderGeometry(renderer, CPointer<Unit>(), verts, Int32(vc), mesh.indices, Int32(ic))
-        }
+        }, "SDL_RenderGeometry")
     }
 
     /*
@@ -1076,9 +1076,9 @@ internal class GeometryBatch {
         if (idxCount == 0 || target.isNull() || verts.isNull() || idxs.isNull()) {
             return
         }
-        let _ = unsafe { // cjcheck-ignore: ignore-result # per-frame draw call: dropping one primitive beats aborting the frame; SDL keeps the error for diagnosis
+        ensureSdl(unsafe {
             SDL_RenderGeometry(target, texture, verts, Int32(vertCount), idxs, Int32(idxCount))
-        }
+        }, "SDL_RenderGeometry")
     }
 }
 

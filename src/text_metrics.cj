@@ -79,4 +79,8 @@ internal class TextMetricsCache {
         }
         generation.put(text, value)
     }
+
+    func clear(): Unit {
+        bySize.clear()
+    }
 }

@@ -33,3 +33,33 @@ func fontRegistryUnregisterAndClear(): Unit {
     Fonts.clear()
     @Expect(Fonts.names().size, 0)
 }
+
+@Test
+func fontRegistryPreservesOrderedFallbackChain(): Unit {
+    Fonts.clear()
+    Fonts.registerFamily("UI", "/primary.ttf", fallbackPaths: ["/cjk.ttf", "/emoji.ttf"])
+
+    @Expect(Fonts.pathFor("UI").getOrThrow(), "/primary.ttf")
+    @Expect(Fonts.fallbackPathsFor("UI"), ["/cjk.ttf", "/emoji.ttf"])
+    @Expect(Fonts.fallbackPathsFor("UI").size, 2)
+    Fonts.clear()
+}
+
+@Test
+func fontRegistryRevisionInvalidatesRendererMetricsForChangedChain(): Unit {
+    Fonts.clear()
+    let renderer = Renderer.headless()
+    Fonts.registerFamily("UI", "/primary.ttf", fallbackPaths: ["/first.ttf"])
+    renderer.resetTextMeasureCount()
+    let _ = renderer.textWidth("mixed 仓颉", font: "UI")
+    @Expect(renderer.textComputeCount(), UInt64(1))
+    renderer.resetTextMeasureCount()
+    let _ = renderer.textWidth("mixed 仓颉", font: "UI")
+    @Expect(renderer.textComputeCount(), UInt64(0))
+
+    Fonts.registerFamily("UI", "/primary.ttf", fallbackPaths: ["/second.ttf"])
+    renderer.resetTextMeasureCount()
+    let _ = renderer.textWidth("mixed 仓颉", font: "UI")
+    @Expect(renderer.textComputeCount(), UInt64(1))
+    Fonts.clear()
+}

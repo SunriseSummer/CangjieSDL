@@ -28,10 +28,21 @@ internal let SDL_WINDOW_METAL: UInt64 = UInt64(0x0000000020000000)
 internal let SDL_WINDOW_TRANSPARENT: UInt64 = UInt64(0x0000000040000000)
 internal let SDL_WINDOW_NOT_FOCUSABLE: UInt64 = UInt64(0x0000000080000000)
 internal let SDL_EVENT_QUIT: UInt32 = UInt32(0x100)
+internal let SDL_EVENT_WINDOW_EXPOSED: UInt32 = UInt32(0x204)
 internal let SDL_EVENT_WINDOW_RESIZED: UInt32 = UInt32(0x206)
+internal let SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: UInt32 = UInt32(0x207)
+internal let SDL_EVENT_WINDOW_MINIMIZED: UInt32 = UInt32(0x209)
+internal let SDL_EVENT_WINDOW_RESTORED: UInt32 = UInt32(0x20B)
+internal let SDL_EVENT_WINDOW_FOCUS_GAINED: UInt32 = UInt32(0x20E)
+internal let SDL_EVENT_WINDOW_FOCUS_LOST: UInt32 = UInt32(0x20F)
+internal let SDL_EVENT_WINDOW_CLOSE_REQUESTED: UInt32 = UInt32(0x210)
+internal let SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED: UInt32 = UInt32(0x214)
+internal let SDL_EVENT_WINDOW_OCCLUDED: UInt32 = UInt32(0x216)
 internal let SDL_EVENT_KEY_DOWN: UInt32 = UInt32(0x300)
 internal let SDL_EVENT_KEY_UP: UInt32 = UInt32(0x301)
+internal let SDL_EVENT_TEXT_EDITING: UInt32 = UInt32(0x302)
 internal let SDL_EVENT_TEXT_INPUT: UInt32 = UInt32(0x303)
+internal let SDL_EVENT_TEXT_EDITING_CANDIDATES: UInt32 = UInt32(0x307)
 internal let SDL_EVENT_MOUSE_MOTION: UInt32 = UInt32(0x400)
 internal let SDL_EVENT_MOUSE_BUTTON_DOWN: UInt32 = UInt32(0x401)
 internal let SDL_EVENT_MOUSE_BUTTON_UP: UInt32 = UInt32(0x402)
@@ -41,6 +52,9 @@ internal let SDL_EVENT_DROP_TEXT: UInt32 = UInt32(0x1001)
 internal let SDL_EVENT_DROP_BEGIN: UInt32 = UInt32(0x1002)
 internal let SDL_EVENT_DROP_COMPLETE: UInt32 = UInt32(0x1003)
 internal let SDL_EVENT_DROP_POSITION: UInt32 = UInt32(0x1004)
+internal let SDL_EVENT_RENDER_TARGETS_RESET: UInt32 = UInt32(0x2000)
+internal let SDL_EVENT_RENDER_DEVICE_RESET: UInt32 = UInt32(0x2001)
+internal let SDL_EVENT_RENDER_DEVICE_LOST: UInt32 = UInt32(0x2002)
 internal let SDL_SCANCODE_A: Int32 = 4
 internal let SDL_SCANCODE_Z: Int32 = 29
 internal let SDL_SCANCODE_1: Int32 = 30
@@ -121,6 +135,8 @@ internal struct SdlEvent {
 @C
 internal struct SdlCommonEvent {
     var eventType: UInt32 = 0
+    var reserved: UInt32 = 0
+    var timestamp: UInt64 = 0
 }
 
 @C
@@ -155,6 +171,51 @@ internal struct SdlTextInputEvent {
     var timestamp: UInt64 = 0
     var windowID: UInt32 = 0
     var text = CPointer<UInt8>()
+}
+
+@C
+internal struct SdlTextEditingEvent {
+    var eventType: UInt32 = 0
+    var reserved: UInt32 = 0
+    var timestamp: UInt64 = 0
+    var windowID: UInt32 = 0
+    var text = CPointer<UInt8>()
+    var start: Int32 = 0
+    var length: Int32 = 0
+}
+
+@C
+internal struct SdlTextEditingCandidatesEvent {
+    var eventType: UInt32 = 0
+    var reserved: UInt32 = 0
+    var timestamp: UInt64 = 0
+    var windowID: UInt32 = 0
+    var candidates = CPointer<CPointer<UInt8>>()
+    var count: Int32 = 0
+    var selected: Int32 = -1
+    var horizontal: Bool = false
+    var padding1: UInt8 = 0
+    var padding2: UInt8 = 0
+    var padding3: UInt8 = 0
+}
+
+@C
+internal struct SdlRenderEvent {
+    var eventType: UInt32 = 0
+    var reserved: UInt32 = 0
+    var timestamp: UInt64 = 0
+    var windowID: UInt32 = 0
+}
+
+@C
+internal struct SdlUserEvent {
+    var eventType: UInt32 = 0
+    var reserved: UInt32 = 0
+    var timestamp: UInt64 = 0
+    var windowID: UInt32 = 0
+    var code: Int32 = 0
+    var data1 = CPointer<Unit>()
+    var data2 = CPointer<Unit>()
 }
 
 @C

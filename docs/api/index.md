@@ -23,12 +23,11 @@ main(): Unit {
             while (let Some(event) <- window.pollEvent()) {
                 match (event) {
                     case UiEvent.Quit => running = false
+                    case UiEvent.WindowCloseRequested => running = false
                     case _ => ()
                 }
             }
-            window.renderer.beginScene(800.0, 600.0, Color.rgb(30, 30, 46))
-            window.renderer.endScene()
-            window.renderer.present()
+            window.renderer.renderFrame(Float32(window.width), Float32(window.height), Color.rgb(30, 30, 46)) {=> ()}
             window.delay(16)
         }
     }

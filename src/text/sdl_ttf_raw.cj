@@ -1,11 +1,33 @@
 package sdl.text
 
+@C
+struct TtfSubstringRect {
+    var x: Int32 = 0
+    var y: Int32 = 0
+    var w: Int32 = 0
+    var h: Int32 = 0
+}
+
+@C
+struct TtfSubstring {
+    var flags: UInt32 = UInt32(0)
+    var offset: Int32 = 0
+    var length: Int32 = 0
+    var lineIndex: Int32 = 0
+    var clusterIndex: Int32 = 0
+    var rect = TtfSubstringRect()
+}
+
 foreign {
     func TTF_Init(): Bool
 
     func TTF_OpenFont(file: CString, pointSize: Float32): CPointer<Unit>
 
     func TTF_SetFontStyle(font: CPointer<Unit>, style: Int32): Unit
+
+    func TTF_AddFallbackFont(font: CPointer<Unit>, fallback: CPointer<Unit>): Bool
+
+    func TTF_ClearFallbackFonts(font: CPointer<Unit>): Unit
 
     func TTF_GetFontFamilyName(font: CPointer<Unit>): CString
 
@@ -15,6 +37,15 @@ foreign {
         length: UIntNative,
         width: CPointer<Int32>,
         height: CPointer<Int32>
+    ): Bool
+
+    func TTF_MeasureString(
+        font: CPointer<Unit>,
+        text: CString,
+        length: UIntNative,
+        maxWidth: Int32,
+        measuredWidth: CPointer<Int32>,
+        measuredLength: CPointer<UIntNative>
     ): Bool
 
     func TTF_CreateRendererTextEngine(renderer: CPointer<Unit>): CPointer<Unit>
@@ -31,6 +62,13 @@ foreign {
     func TTF_SetTextString(text: CPointer<Unit>, value: CString, length: UIntNative): Bool
 
     func TTF_SetTextColor(text: CPointer<Unit>, red: UInt8, green: UInt8, blue: UInt8, alpha: UInt8): Bool
+
+    func TTF_GetTextSubStringForPoint(
+        text: CPointer<Unit>,
+        x: Int32,
+        y: Int32,
+        substring: CPointer<TtfSubstring>
+    ): Bool
 
     func TTF_DrawRendererText(text: CPointer<Unit>, x: Float32, y: Float32): Bool
 

@@ -32,12 +32,12 @@ sdl = { path = "../sdl" }
 
 ## 先建立一个模型
 
-`WindowSpec` 只描述窗口初始条件，`SdlWindow` 拥有原生窗口和渲染器，`UiEvent` 把系统消息变成仓颉枚举，`Renderer` 负责每帧画面。每帧先把事件取空，再调用 `beginScene` 清屏并进入场景，完成绘制后 `endScene` 解析超采样目标，最后 `present` 把画面交给显示器。窗口放进 try-with-resources，任何正常或异常退出都会执行关闭。
+`WindowSpec` 只描述窗口初始条件，`SdlWindow` 拥有原生窗口和渲染器，`UiEvent` 把系统消息变成仓颉枚举，`Renderer` 负责每帧画面。每帧先把事件取空，再用 `renderFrame` 成对完成 begin、绘制、resolve 与 present；绘制体抛错时它仍恢复 render target、scale 与 clip，但不呈现残缺帧。窗口放进 try-with-resources，任何正常或异常退出都会执行关闭。
 
 ## 操作步骤
 
 1. 建立上述目录和 `cjpm.toml`，先运行 `cjpm build`，确认依赖路径正确。
-2. 把下面完整程序保存为 `src/main.cj`。`WindowResized` 分支刷新窗口逻辑尺寸；绘制时每帧读取 `window.width` 与 `window.height`，因此不是只在启动时计算一次。
+2. 把下面完整程序保存为 `src/main.cj`。标准事件入口在返回 `WindowResized`/DPI 事件前自动刷新窗口快照；绘制时每帧读取 `window.width` 与 `window.height`，因此不是只在启动时计算一次。
 3. 运行 `cjpm run`。看到窗口后拖动右下角，确认背景和卡片继续完整显示。
 4. 点击窗口关闭按钮。只有进程返回且退出码为 0，首个生命周期闭环才完成。
 
@@ -56,7 +56,7 @@ main(): Unit {
             while (let Some(event) <- current) {
                 match (event) {
                     case UiEvent.Quit => running = false
-                    case UiEvent.WindowResized(_, _) => let _ = window.refreshSize()
+                    case UiEvent.WindowCloseRequested => running = false
                     case _ => ()
                 }
                 current = window.pollEvent()
@@ -66,36 +66,35 @@ main(): Unit {
             let height = Float32(window.height)
             let card = Rect(32.0, 32.0, width - 64.0, height - 64.0)
             let renderer = window.renderer
-            renderer.beginScene(width, height, Color.rgb(15, 23, 42))
-            renderer.fillRoundedRectGradient(
-                card,
-                22.0,
-                Color.rgb(30, 64, 175),
-                Color.rgb(14, 116, 144)
-            )
-            renderer.strokeRoundedRect(
-                card,
-                22.0,
-                Pen(width: 2.0, color: Color.rgba(165, 243, 252, 210))
-            )
-            renderer.text(
-                "你好，SDL3",
-                64.0,
-                74.0,
-                Color.rgb(255, 255, 255),
-                pointSize: FontSizes.DISPLAY
-            )
-            renderer.text(
-                "拖动窗口边框，然后点击关闭",
-                66.0,
-                132.0,
-                Color.rgb(207, 250, 254),
-                pointSize: FontSizes.BODY
-            )
-            renderer.fillCircle(76.0, height - 82.0, 8.0, Color.rgb(74, 222, 128))
-            renderer.text("事件循环正在运行", 96.0, height - 94.0, Color.rgb(220, 252, 231))
-            renderer.endScene()
-            renderer.present()
+            renderer.renderFrame(width, height, Color.rgb(15, 23, 42)) {
+                renderer.fillRoundedRectGradient(
+                    card,
+                    22.0,
+                    Color.rgb(30, 64, 175),
+                    Color.rgb(14, 116, 144)
+                )
+                renderer.strokeRoundedRect(
+                    card,
+                    22.0,
+                    Pen(width: 2.0, color: Color.rgba(165, 243, 252, 210))
+                )
+                renderer.text(
+                    "你好，SDL3",
+                    64.0,
+                    74.0,
+                    Color.rgb(255, 255, 255),
+                    pointSize: FontSizes.DISPLAY
+                )
+                renderer.text(
+                    "拖动窗口边框，然后点击关闭",
+                    66.0,
+                    132.0,
+                    Color.rgb(207, 250, 254),
+                    pointSize: FontSizes.BODY
+                )
+                renderer.fillCircle(76.0, height - 82.0, 8.0, Color.rgb(74, 222, 128))
+                renderer.text("事件循环正在运行", 96.0, height - 94.0, Color.rgb(220, 252, 231))
+            }
             window.delay(UInt32(8))
         }
     }
@@ -112,7 +111,7 @@ main(): Unit {
 
 ## 接着试一试
 
-把下面片段放到绘制文字之后、`endScene()` 之前。它根据窗口像素密度显示不同提示，并把卡片内的右侧区域裁剪起来；这同时验证运行时显示信息和裁剪栈，而不是只换一种颜色。
+把下面片段放到 `renderFrame` 绘制体的文字之后。它根据窗口像素密度显示不同提示，并把卡片内的右侧区域裁剪起来；这同时验证运行时显示信息和裁剪栈，而不是只换一种颜色。
 
 ```cangjie role=variation
 let density = window.pixelDensity()
@@ -127,7 +126,7 @@ renderer.popClip()
 
 ## 如果没有成功
 
-编译器找不到 `sdl` 时先核对 `cjpm.toml` 路径；启动时报找不到 SDL DLL 时不要修改导入，按[构建、动态库与字体排错](../troubleshooting/build-runtime-fonts.md)检查运行库。窗口出现但中文不可见，优先确认系统有支持的 UI 字体。窗口能显示却拖动后卡片异常，检查是否处理了 `WindowResized` 并每帧读取当前宽高。程序不返回但窗口仍能响应，是事件循环的正常行为；关闭窗口即可。
+编译器找不到 `sdl` 时先核对 `cjpm.toml` 路径；启动时报找不到 SDL DLL 时不要修改导入，按[构建、动态库与字体排错](../troubleshooting/build-runtime-fonts.md)检查运行库。窗口出现但中文不可见，优先确认系统有支持的 UI 字体。窗口能显示却拖动后卡片异常，检查是否通过标准 poll/wait 入口处理事件并每帧读取当前宽高；若绕过封装直接接原生事件，才需要手工 `refreshDisplayMetrics()`。程序不返回但窗口仍能响应，是事件循环的正常行为；关闭窗口即可。
 
 ## 相关 API
 

@@ -1,5 +1,20 @@
 package sdl
 
+@Test
+func rendererRejectsDrawingFromAnotherCangjieThread(): Unit {
+    let renderer = Renderer.headless()
+    let worker = spawn {
+        => var rejected = false
+        try {
+            renderer.fill(Rect.zero(), Color.rgb(1, 2, 3))
+        } catch (_: IllegalStateException) {
+            rejected = true
+        }
+        rejected
+    }
+    @Expect(worker.get())
+}
+
 /*
  * Clip bookkeeping is renderer-side state independent of any SDL device, so a headless
  * renderer exercises the stack semantics directly: push intersects with the active clip,
@@ -49,6 +64,16 @@ func beginSceneDropsAnyLeakedClip(): Unit {
     renderer.beginScene(100.0, 100.0, Color.rgb(0, 0, 0))
 
     @Expect(renderer.currentClip().isNone())
+}
+
+@Test
+func renderPassResolvesExactlyOnceWhenClosedRepeatedly(): Unit {
+    let renderer = Renderer.headless()
+    let pass = renderer.beginRenderPass(100.0, 80.0, Color.rgb(0, 0, 0))
+    @Expect(!pass.isClosed())
+    pass.close()
+    pass.close()
+    @Expect(pass.isClosed())
 }
 
 // The headless contract: every rendering entry point is a no-op and every query returns a

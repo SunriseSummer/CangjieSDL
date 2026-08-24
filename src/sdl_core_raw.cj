@@ -15,6 +15,12 @@ foreign {
 
     func SDL_PollEvent(event: CPointer<SdlEvent>): Bool
 
+    func SDL_WaitEventTimeout(event: CPointer<SdlEvent>, timeoutMS: Int32): Bool
+
+    func SDL_PushEvent(event: CPointer<SdlEvent>): Bool
+
+    func SDL_RegisterEvents(numEvents: Int32): UInt32
+
     func SDL_GetTicks(): UInt64
 
     func SDL_Delay(ms: UInt32): Unit

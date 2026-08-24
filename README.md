@@ -6,6 +6,7 @@ CangjieSDL 是对跨平台多媒体库 [SDL](https://github.com/libsdl-org) 的�
 
 - 窗口创建、状态控制、DPI 缩放、垂直同步与超采样抗锯齿。
 - 线条、矩形、圆角矩形、圆、凸多边形、渐变、虚线边框和阴影。
+- 不可变绘制命令缓冲与持久目标局部 damage，支持 GUI display list 重放和增量绘制。
 - 基于 SDL3_ttf 的 UTF-8 文本绘制、度量、居中、旋转和字体注册。
 - BMP/PNG 表面与纹理、旋转/镜像绘制、纹理三角带。
 - 捕获键盘、鼠标、文本、滚轮、拖放与窗口事件。
@@ -52,32 +53,32 @@ main() {
             while (let Some(event) <- window.pollEvent()) {
                 match (event) {
                     case UiEvent.Quit => running = false
+                    case UiEvent.WindowCloseRequested => running = false
                     case _ => ()
                 }
             }
 
             let renderer = window.renderer
-            renderer.beginScene(800.0, 600.0, Color.rgb(15, 23, 42))
-            renderer.strokeRoundedRect(
-                Rect(220.0, 180.0, 360.0, 180.0),
-                24.0,
-                Pen(width: 3.0, color: Color.rgb(46, 232, 159))
-            )
-            renderer.textCenter(
-                "Hello, CangjieSDL",
-                Rect(220.0, 180.0, 360.0, 180.0),
-                Color.rgb(255, 255, 255),
-                pointSize: 30.0
-            )
-            renderer.endScene()
-            renderer.present()
+            renderer.renderFrame(Float32(window.width), Float32(window.height), Color.rgb(15, 23, 42)) {
+                renderer.strokeRoundedRect(
+                    Rect(220.0, 180.0, 360.0, 180.0),
+                    24.0,
+                    Pen(width: 3.0, color: Color.rgb(46, 232, 159))
+                )
+                renderer.textCenter(
+                    "Hello, CangjieSDL",
+                    Rect(220.0, 180.0, 360.0, 180.0),
+                    Color.rgb(255, 255, 255),
+                    pointSize: 30.0
+                )
+            }
             window.delay(16)
         }
     }
 }
 ```
 
-执行 `cjpm run` 即可运行查看效果。这段代码创建了一个深色背景窗口，并在中间绘制一个绿色圆角矩形边框，内部呈现白色文字“Hello，CangjieSDL”。每帧都执行动作 `beginScene → 绘制 → endScene → present` 。`SdlWindow` 实现了仓颉预定义的 `Resource` 资源管理接口，结合 `try-with-resources` 语法糖使用，在正常退出和异常路径下都能自动释放窗口及渲染资源。
+执行 `cjpm run` 即可运行查看效果。`renderFrame` 执行异常安全的 begin → draw → resolve → present 事务；绘制体抛错时仍恢复 render target、scale 与 clip，但不会呈现残缺帧。需要在 resolve 与 present 之间截图或剖析时改用 [`RenderPass`](docs/api/sdl/RenderPass.md)。`SdlWindow` 实现仓颉 `Resource`，正常和异常退出都自动释放窗口及渲染资源。
 
 ## 许可证
 

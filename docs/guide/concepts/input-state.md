@@ -10,7 +10,9 @@
 
 桌面按钮通常在一次 MouseDown 或 MouseUp 上触发一次动作，而游戏角色需要在按住方向键期间持续移动。若直接在 `KeyDown` 中移动固定距离，速度取决于操作系统键盘重复设置；若只处理按下不处理抬起，角色会永远移动；若把文本字符当扫描码解析，键盘布局、Shift 和输入法会产生错误。
 
-`UiEvent.KeyDown` 给出 `Key` 和 repeat 标志，`KeyUp` 表示释放；`TextInput` 已由系统处理键盘布局和组合输入，适合文本与计算器字符；鼠标事件坐标属于逻辑空间，滚轮是增量；拖放按 Begin、File/Text/Position、Complete 组成序列。`Keyboard.modifiers()` 与 `Mouse.state(scale)` 是当前状态快照，不取代事件边沿。
+`UiEvent.KeyDown` 给出 `Key` 和 repeat 标志，`KeyUp` 表示释放。字母/数字键优先按 SDL 逻辑 keycode 映射，因此会随键盘布局变化；方向、导航和功能键按物理 scancode 回退，适合位置型控制。`TextInput` 已处理键盘布局、Shift 和输入法组合，适合真正的文本输入。鼠标事件坐标属于逻辑空间，滚轮是增量；拖放按 Begin、File/Text/Position、Complete 组成序列。
+
+需要快捷键修饰符、原始键值、时间戳或来源窗口时，使用 `pollEventRecord` / `SdlEventPump`，把 `UiEventRecord.metadata` 与事件一起排队。`metadata.modifiers` 是事件发生时的快照；`Keyboard.modifiers()` 与 `Mouse.state(scale)` 只反映查询当下的全局状态，不能在延迟消费事件时还原历史按键组合。
 
 ## 工作模型
 
@@ -38,7 +40,7 @@ if (input.rightHeld) {
 
 按钮“点击”应选择 MouseUp 还是 MouseDown，取决于交互语义；需要允许按下后拖出取消时，用 Down 记录候选、Up 再确认。文本编辑用 `TextInput`，导航与快捷键用 `KeyDown`，不要混在一套字符映射里。需要全局鼠标捕获或相对模式时明确开启并在结束后恢复，否则光标行为会影响整个应用。
 
-轮询快照适合启动时同步或恢复焦点后的修正，事件适合保留顺序和边沿。两者同时使用时要定义优先级，避免一帧中互相覆盖。Cursor 是资源，SystemCursor 枚举只是种类；创建、激活和关闭仍遵循资源边界。
+轮询快照适合启动时同步或恢复焦点后的修正，事件适合保留顺序和边沿。两者同时使用时要定义优先级，避免一帧中互相覆盖。快捷键判断应读取同一条 `UiEventRecord` 的 `metadata.modifiers`；不要先保存 `UiEvent`，稍后再查询 `Keyboard.modifiers()`。Cursor 是资源，SystemCursor 枚举只是种类；创建、激活和关闭仍遵循资源边界。
 
 ## 应用这个模型
 
@@ -48,11 +50,13 @@ if (input.rightHeld) {
 
 ## 常见误解
 
-repeat 不是“按键当前仍按住”的权威状态；它只是重复的 KeyDown。`TextInput` 也不等于每次只有一个 ASCII 字符，字符串可能包含多个 Unicode 字符。鼠标全局状态的坐标缩放参数必须与应用逻辑空间一致。最后，捕获鼠标、隐藏光标或启用相对模式属于有副作用的运行状态，退出相关操作时要恢复。
+repeat 不是修饰键，也不是“按键当前仍按住”的权威状态；它只是重复的 KeyDown。`Key` 不是完整文本字符接口：字母/数字是逻辑按键，组合后的字符仍来自 `TextInput`，且一次字符串可能包含多个 Unicode 字符。鼠标全局状态的坐标缩放参数必须与应用逻辑空间一致。最后，捕获鼠标、隐藏光标或启用相对模式属于有副作用的运行状态，退出相关操作时要恢复。
 
 ## 相关 API
 
 - [`UiEvent`](../../api/sdl/UiEvent.md)：事件种类与载荷。
+- [`UiEventRecord`](../../api/sdl/UiEventRecord.md) 与 [`UiEventMetadata`](../../api/sdl/UiEventMetadata.md)：事件发生时的键值、修饰键、窗口与时间戳。
+- [`EventKeyModifiers`](../../api/sdl/EventKeyModifiers.md)：不可变修饰键快照。
 - [`Key`](../../api/sdl/Key.md) 与 [`MouseButton`](../../api/sdl/MouseButton.md)：输入枚举。
 - [`Keyboard`](../../api/sdl/input/Keyboard.md)：修饰键快照。
 - [`Mouse`](../../api/sdl/input/Mouse.md) 与 [`Cursor`](../../api/sdl/input/Cursor.md)：鼠标状态、捕获和光标。

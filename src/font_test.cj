@@ -1,11 +1,89 @@
 package sdl
 
 @Test
+func textMeasureSessionRejectsUseAfterRendererClose(): Unit {
+    let window = SdlWindow(WindowSpec("Text session lifetime", 120, 80, supersample: 1))
+    let session = window.renderer.textMeasureSession("lifetime")
+    window.close()
+
+    var rejected = false
+    try {
+        let _ = session.measure(0, session.byteLength)
+    } catch (_: IllegalStateException) {
+        rejected = true
+    } finally {
+        session.close()
+    }
+    @Expect(rejected)
+}
+
+@Test
+func directRenderPassRestoresLogicalTextMetricsCacheBetweenFrames(): Unit {
+    let window = SdlWindow(WindowSpec("Direct text metrics cache", 160, 100, supersample: 1))
+    try {
+        let renderer = window.renderer
+        let pass = renderer.beginRenderPass(160.0, 100.0, Color.rgb(18, 22, 28))
+        renderer.text("prime draw scale", 8.0, 8.0, Color.rgb(240, 240, 240))
+        pass.close()
+
+        renderer.resetTextMeasureCount()
+        let first = renderer.textWidth("stable direct-frame measurement")
+        let second = renderer.textWidth("stable direct-frame measurement")
+
+        @Expect(first, second)
+        @Expect(renderer.textMeasureCount(), UInt64(2))
+        @Expect(renderer.textComputeCount(), UInt64(1))
+    } finally {
+        window.close()
+    }
+}
+
+@Test
 func systemUiFontMeasuresChineseAndLatinText(): Unit {
     let window = SdlWindow(WindowSpec("Font test", 320, 120))
     try {
         @Expect(window.renderer.textWidth("仓颉 GUI", pointSize: FontSizes.BODY) > 0.0)
         @Expect(window.renderer.textHeight(pointSize: FontSizes.BODY) > 0.0)
+    } finally {
+        window.close()
+    }
+}
+
+@Test
+func headlessTextMeasureSessionUsesUtf8ByteBoundaries(): Unit {
+    let renderer = Renderer.headless()
+    let session = renderer.textMeasureSession("A中B")
+    try (resource = session) {
+        let ascii = resource.fit(0, 20.0)
+        @Expect(ascii.byteLength, 1)
+        @Expect(ascii.width, renderer.textWidth("A"))
+        let cjk = resource.fit(1, 25.0)
+        @Expect(cjk.byteLength, 3)
+        @Expect(cjk.width, renderer.textWidth("中"))
+        @Expect(resource.measure(1, 3), renderer.textWidth("中"))
+        let beforeCjk = resource.hitTest(renderer.textWidth("A") + 1.0)
+        @Expect(beforeCjk.byteOffset, Int64(1))
+        let afterCjk = resource.hitTest(renderer.textWidth("A中") - 1.0)
+        @Expect(afterCjk.byteOffset, Int64(4))
+    }
+    @Expect(session.isClosed())
+}
+
+@Test
+func nativeTextMeasureSessionFitsWithoutSubstringAllocation(): Unit {
+    let window = SdlWindow(WindowSpec("Text fit test", 320, 120))
+    try {
+        let renderer = window.renderer
+        let text = "Hello 世界 and more"
+        let maxWidth = renderer.textWidth("Hello 世界")
+        let session = renderer.textMeasureSession(text)
+        try (resource = session) {
+            let fit = resource.fit(0, maxWidth)
+            @Expect(fit.byteLength > 0)
+            @Expect(fit.byteLength < text.size)
+            @Expect(fit.width <= maxWidth)
+            @Expect(resource.measure(0, fit.byteLength) <= maxWidth)
+        }
     } finally {
         window.close()
     }
@@ -32,6 +110,41 @@ func namedFontsLoadAndFallBack(): Unit {
     } finally {
         Fonts.unregister("iter2-sys")
         Fonts.unregister("iter2-bad")
+        window.close()
+    }
+}
+
+@Test
+func nativeFontFamilyShapesThroughOrderedFallbacks(): Unit {
+    let window = SdlWindow(WindowSpec("Native fallback font test", 320, 120, supersample: 1))
+    try {
+        Fonts.registerFamily("fallback-chain", "C:\\Windows\\Fonts\\segoeui.ttf",
+            fallbackPaths: ["C:\\Windows\\Fonts\\msyh.ttc"])
+        let renderer = window.renderer
+        @Expect(renderer.textWidth("Latin 仓颉 😀", pointSize: 18.0, font: "fallback-chain") > 0.0)
+        renderer.renderFrame(320.0, 120.0, Color.rgb(255, 255, 255)) {
+            renderer.text("Latin 仓颉 😀", 8.0, 8.0, Color.rgb(20, 30, 40), pointSize: 18.0,
+                font: "fallback-chain")
+        }
+    } finally {
+        Fonts.unregister("fallback-chain")
+        window.close()
+    }
+}
+
+@Test
+func nativeTextHitTestReturnsUtf8ClusterBoundary(): Unit {
+    let window = SdlWindow(WindowSpec("Native text hit test", 240, 100, supersample: 1))
+    try {
+        let text = "office 仓颉"
+        let session = window.renderer.textMeasureSession(text, pointSize: 18.0)
+        try (resource = session) {
+            let hit = resource.hitTest(window.renderer.textWidth("office ", pointSize: 18.0) + 2.0)
+            @Expect(hit.byteOffset >= Int64(7))
+            @Expect(hit.byteOffset <= text.size)
+            @Expect(hit.bounds.h >= 0.0)
+        }
+    } finally {
         window.close()
     }
 }

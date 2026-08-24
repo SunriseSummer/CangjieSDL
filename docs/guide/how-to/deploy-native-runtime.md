@@ -69,7 +69,7 @@ try (window = SdlWindow(WindowSpec("部署探针", 480, 280))) {
 - [`sdl` 包](../../api/sdl/index.md)：版本函数和核心运行时。
 - [`SdlWindow`](../../api/sdl/SdlWindow.md)：真实窗口与渲染器探针。
 - [`Renderer`](../../api/sdl/Renderer.md)：驱动名和场景提交。
-- [部署与 FFI 源文档](../../../../../sdl/docs/deployment-and-ffi.md)：仓库原生库布局与 ABI 边界。
+- [仓库环境要求与部署说明](../../../README.md#环境要求)：原生库版本、仓库布局与发布时动态库搜索边界。
 
 ## 下一步
 

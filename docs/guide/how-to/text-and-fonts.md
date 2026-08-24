@@ -34,7 +34,23 @@ renderer.textCenter("导出", button, Color.rgb(8, 47, 73),
     pointSize: FontSizes.CONTROL, style: FontStyle(bold: true))
 ```
 
-长读数可先测 DISPLAY 宽度，超出可用范围后改用 TITLE 或自定义较小字号；不要只缩放绘制而继续使用旧度量。若需要字体名，先通过 `Fonts` 注册，再在度量和绘制中都传 `font: Some("brand")`。
+长读数可先测 DISPLAY 宽度，超出可用范围后改用 TITLE 或自定义较小字号；不要只缩放绘制而继续使用旧度量。若需要字体名，先通过 `Fonts.registerFamily` 注册主字体与有序 fallback，再在度量和绘制中都传 `font: Some("brand")`。
+
+```cangjie role=patch
+Fonts.registerFamily("brand", "assets/fonts/BrandLatin.ttf",
+    fallbackPaths: ["assets/fonts/NotoSansCJKsc-Regular.otf", "assets/fonts/NotoColorEmoji.ttf"])
+```
+
+需要为长行找换行位置或把点击映射到光标时，在一次布局/交互中复用测量会话；会话固定字符串、字体、字号和样式，使用完后关闭。`hitTest` 返回 shaping cluster 的安全边界，比逐个测量字符串前缀更快，也不会把连字或 RTL cluster 拆开。
+
+```cangjie role=patch
+try (measure = renderer.textMeasureSession(line, pointSize: FontSizes.BODY,
+    font: Some("brand"))) {
+    let firstLine = measure.fit(0, availableWidth)
+    let caret = measure.hitTest(pointerX)
+    println("fit bytes=${firstLine.byteLength}, caret=${caret.byteOffset}")
+}
+```
 
 ## 确认结果
 
@@ -42,7 +58,7 @@ renderer.textCenter("导出", button, Color.rgb(8, 47, 73),
 
 ## 常见错误
 
-测量 regular、绘制 bold 会导致右对齐漂移；`textWidth` 使用默认字体、`text` 使用命名字体也会错。把 `textHeight` 当多行布局高度会让行间距不足。每帧注册字体或清空纹理缓存会造成不必要工作。headless 度量适合测试控制流，不应拿来承诺最终像素宽度；视觉验收必须在真实窗口中完成。
+测量 regular、绘制 bold 会导致右对齐漂移；`textWidth` 使用默认字体、`text` 使用命名字体也会错。把 `textHeight` 当多行布局高度会让行间距不足。每帧注册字体或清空纹理缓存会造成不必要工作；注册表变化会推进 `Fonts.revision()` 并使相关缓存自动失效。`fit` 只保证 UTF-8 码点安全和宽度适配，不负责语言断行规则；段落层仍要处理 UAX #14、组合字符、ZWJ 与标点禁则。headless 度量适合测试控制流，不应拿来承诺最终像素宽度；视觉验收必须在真实窗口中完成。
 
 ## 可以继续修改
 
@@ -60,6 +76,7 @@ renderer.textRotated("已过期", width - 120.0, 88.0, -12.0,
 - [`FontStyle`](../../api/sdl/FontStyle.md)：文字样式组合。
 - [`FontSizes`](../../api/sdl/FontSizes.md)：常用字号层级。
 - [`Fonts`](../../api/sdl/Fonts.md)：命名字体注册。
+- [`TextMeasureSession`](../../api/sdl/TextMeasureSession.md)：长串适配、范围测量与 cluster 命中。
 
 ## 下一步
 

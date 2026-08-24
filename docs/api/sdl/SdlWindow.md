@@ -4,7 +4,7 @@
 
 `sdl` 包中的 public class
 
-与自己的[渲染器](Renderer.md)成对创建、成对关闭的 SDL 窗口。`width`/`height` 与全部事件、绘制坐标都是逻辑像素，`scale` 把它们映射到窗口像素。构造函数初始化视频子系统并开启文本输入，失败抛 `SdlException`；[`close`](#close) 幂等，释放渲染器、窗口与一个视频子系统引用——SDL3 对子系统初始化计数，关掉一个窗口不会拆掉另一个仍开着的窗口的子系统。除明确以空值或布尔值表示状态的查询外，SDL 拒绝窗口设置或无法完成带错误状态的查询时，方法会把失败状态转换为 `SdlException`。
+与自己的[渲染器](Renderer.md)成对创建、成对关闭的 SDL 窗口。`width`/`height` 与全部事件、绘制坐标都是逻辑像素；动态 DPI 把应用内容缩放、原生窗口坐标与后备像素密度分开，避免 Retina 上重复放大。构造函数初始化视频子系统并开启文本输入，失败抛 `SdlException`；[`close`](#close) 幂等，释放渲染器、窗口与一个视频子系统引用——SDL3 对子系统初始化计数，关掉一个窗口不会拆掉另一个仍开着的窗口的子系统。
 
 ## 声明
 
@@ -59,7 +59,10 @@ main(): Unit {
 |---|---|
 | [`width`](#width) | 逻辑宽度；`setSize`/`refreshSize` 时更新。 |
 | [`height`](#height) | 逻辑高度；`setSize`/`refreshSize` 时更新。 |
-| [`scale`](#scale) | 逻辑像素到窗口像素的缩放比，创建后固定。 |
+| [`id`](#id) | SDL 稳定窗口 id，事件元数据用它路由多窗口输入。 |
+| [`scale`](#scale) | 动态逻辑单位到原生窗口坐标的内容缩放。 |
+| [`currentPixelDensity`](#currentpixeldensity) | 动态原生窗口坐标到后备像素的密度。 |
+| [`currentDisplayScale`](#currentdisplayscale) | SDL 当前显示缩放。 |
 | [`renderer`](#renderer) | 与窗口同生命周期的`渲染器`；`close` 时随窗口一同释放。 |
 
 **方法**
@@ -71,6 +74,11 @@ main(): Unit {
 | [`refreshSize()`](#refreshsize) | 从 SDL 重新读取窗口尺寸（除以 `scale` 转回逻辑像素）并更新 `width`/`height` 字段。 |
 | [`setTextInputArea(rect: Rect)`](#settextinputarea) | 告知系统文本光标所在区域（窗口逻辑像素，与事件、绘制同空间），输入法候选窗随之出现在光标旁而不是屏幕角落。 |
 | [`pollEvent()`](#pollevent) | 取出一条已解码事件；队列空时为 `None`。 |
+| [`pollEventRecord()`](#polleventrecord) | 取出事件及事件时刻的 window/timestamp/key/modifier 元数据。 |
+| [`waitEventTimeout(timeoutMs: Int32)`](#waiteventtimeout) | 阻塞等待一条事件，超时返回 `None`；负值无限等待。 |
+| [`waitEventRecordTimeout(timeoutMs: Int32)`](#waiteventrecordtimeout) | 带元数据的阻塞事件入口。 |
+| [`refreshDisplayMetrics()`](#refreshdisplaymetrics) | 重读动态 DPI，并更新 Renderer scale/epoch。 |
+| [`wake()`](#wake) | 从任意线程推送本窗口的 `Wake` 事件，中断事件等待。 |
 | [`ticks()`](#ticks) | SDL 初始化以来的毫秒数。 |
 | [`delay(ms: UInt32)`](#delay) | 阻塞等待指定毫秒。 |
 | [`isClosed()`](#isclosed) | 判断窗口是否已关闭。 |
@@ -144,12 +152,20 @@ public init(spec: WindowSpec)
 
 ## 字段
 
+### id
+
+窗口创建后由 SDL 分配的稳定 id；多窗口事件通过 [`UiEventMetadata.windowId`](UiEventMetadata.md) 与它匹配。
+
+```cangjie
+public prop id: UInt32
+```
+
 ### width
 
 逻辑宽度；[`setSize`](#setsize)/[`refreshSize`](#refreshsize) 时更新。
 
 ```cangjie
-public var width: Int32
+public prop width: Int32
 ```
 
 ### height
@@ -157,15 +173,31 @@ public var width: Int32
 逻辑高度；[`setSize`](#setsize)/[`refreshSize`](#refreshsize) 时更新。
 
 ```cangjie
-public var height: Int32
+public prop height: Int32
 ```
 
 ### scale
 
-逻辑像素到窗口像素的缩放比，创建后固定。事件坐标已除以该值。
+逻辑像素到原生窗口坐标的动态内容缩放。事件坐标已除以该值；后备像素总缩放为 `scale * currentPixelDensity`。
 
 ```cangjie
-public let scale: Float32
+public prop scale: Float32
+```
+
+### currentPixelDensity
+
+一个原生窗口坐标单位对应的后备像素数。它与 `scale` 分层，不能再乘入布局尺寸。
+
+```cangjie
+public prop currentPixelDensity: Float32
+```
+
+### currentDisplayScale
+
+SDL 当前为窗口报告的综合显示缩放，尚未叠加应用请求的 `WindowSpec.scale`。
+
+```cangjie
+public prop currentDisplayScale: Float32
 ```
 
 ### renderer
@@ -177,6 +209,32 @@ public let renderer: Renderer
 ```
 
 ## 方法
+
+### waitEventTimeout
+
+```cangjie
+public func waitEventTimeout(timeoutMs: Int32): ?UiEvent
+```
+
+等待最多指定毫秒；负数无限等待，0 只检查队列。返回的坐标已转换为逻辑像素，超时为 `None`。
+
+### waitEventRecordTimeout
+
+```cangjie
+public func waitEventRecordTimeout(timeoutMs: Int32): ?UiEventRecord
+```
+
+与 `waitEventTimeout` 相同，但保留事件时刻的窗口、时间、物理/逻辑键和修饰键快照。多窗口程序应改用
+[`SdlEventPump.waitTimeout`](SdlEventPump.md)，避免一个窗口取走另一个窗口的事件。
+
+### wake
+
+```cangjie
+public func wake(): Bool
+```
+
+把注册给本窗口的线程安全用户事件加入 SDL 队列，使 `waitEventTimeout` 返回 `UiEvent.Wake`。SDL 在
+返回前复制事件，工作线程可安全调用；返回值表示推送是否成功。
 
 ### setTitle
 
@@ -212,7 +270,8 @@ public func setSize(width: Int32, height: Int32): Unit
 
 ### refreshSize
 
-从 SDL 重新读取窗口尺寸（除以 `scale` 转回逻辑像素）并更新 `width`/`height` 字段。处理 [`UiEvent.WindowResized`](UiEvent.md#windowresized) 后调用。
+从 SDL 重新读取窗口尺寸（除以 `scale` 转回逻辑像素）并更新 `width`/`height` 字段。标准
+`pollEvent*` / `waitEvent*` 入口在解码 `WindowResized` 时已经自动刷新；直接改变原生窗口状态或需要主动同步时调用。
 
 ```cangjie
 public func refreshSize(): Size
@@ -249,6 +308,26 @@ public func pollEvent(): ?UiEvent
 ```
 
 **返回值** `?UiEvent` — 下一条事件，或 `None`。
+
+### pollEventRecord
+
+取出一条 [`UiEventRecord`](UiEventRecord.md)。除逻辑坐标换算外，窗口尺寸/DPI 与 Renderer reset/lost 事件会先更新本窗口的缓存尺度或设备 epoch，再把记录返回应用。
+
+```cangjie
+public func pollEventRecord(): ?UiEventRecord
+```
+
+单窗口程序可直接使用；多窗口共享 SDL 进程队列，必须由 [`SdlEventPump`](SdlEventPump.md) 单点消费和路由。
+
+### refreshDisplayMetrics
+
+重新查询动态 DPI 四层尺度。值发生变化时同步 `scale`、`currentPixelDensity`、`currentDisplayScale`，更新 Renderer 的逻辑到后备像素缩放与资源 epoch，并重新校验逻辑尺寸。
+
+```cangjie
+public func refreshDisplayMetrics(): WindowDisplayMetrics
+```
+
+**返回值** [`WindowDisplayMetrics`](WindowDisplayMetrics.md) — 刷新后的完整尺度快照。
 
 ### ticks
 

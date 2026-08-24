@@ -35,6 +35,26 @@ func windowSizeFromPixelsUsesNormalizedScale(): Unit {
 }
 
 @Test
+func displayMetricsSeparateWindowsScalingFromRetinaDensity(): Unit {
+    let windows = displayMetricsFromScales(1.0, 1.0, 2.0)
+    @Expect(windows.contentScale, 2.0)
+    @Expect(windows.pixelDensity, 1.0)
+    @Expect(windows.renderScale, 2.0)
+
+    let retina = displayMetricsFromScales(1.0, 2.0, 2.0)
+    @Expect(retina.contentScale, 1.0)
+    @Expect(retina.pixelDensity, 2.0)
+    @Expect(retina.renderScale, 2.0)
+}
+
+@Test
+func displayMetricsComposeApplicationZoomExactlyOnce(): Unit {
+    let metrics = displayMetricsFromScales(1.25, 2.0, 2.0)
+    @Expect(metrics.contentScale, 1.25)
+    @Expect(metrics.renderScale, 2.5)
+}
+
+@Test
 func windowProgressStateFromCodeMapsSdlValues(): Unit {
     @Expect(isNoProgress(windowProgressStateFromCode(SDL_PROGRESS_STATE_NONE)))
     @Expect(isIndeterminate(windowProgressStateFromCode(SDL_PROGRESS_STATE_INDETERMINATE)))

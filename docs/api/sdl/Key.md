@@ -4,7 +4,7 @@
 
 `sdl` 包中的 public enum
 
-从 SDL 扫描码解码出的键盘按键——物理按键，与键盘布局无关。`Letter` 携带大写 ASCII 码（A–Z），`Digit` 携带 ASCII 数字码（'0'–'9'）；未映射的按键以 `RawScancode` 携带原始扫描码到达，任何按键都不会被丢弃。可打印文本不经由此类型——它经输入法合成后以 [`UiEvent.TextInput`](UiEvent.md#textinput) 到达。
+解码后的键盘按键。字母与数字优先来自 SDL 的布局相关逻辑 keycode，导航/功能键按物理 scancode 映射；`Letter` 携带大写 ASCII 码（A–Z），`Digit` 携带 ASCII 数字码（'0'–'9'）。未映射的按键以 `RawScancode` 携带原始扫描码到达。可打印文本仍不经由此类型——它经输入法合成后以 [`UiEvent.TextInput`](UiEvent.md#textinput) 到达；需要同时区分物理键和逻辑键时读取 [`UiEventMetadata`](UiEventMetadata.md)。
 
 ## 声明
 
@@ -152,7 +152,7 @@ Down
 
 ### Letter
 
-字母键，携带大写 ASCII 码 65–90。它与键盘布局无关：该值来自物理扫描码所对应的字母。
+字母键，携带大写 ASCII 码 65–90。正常键盘事件优先从逻辑 keycode 得到，因此会跟随当前布局；用事件元数据的 `physicalScancode` 实现与布局无关的物理键位操作。
 
 ```cangjie
 Letter(UInt8)
@@ -160,7 +160,7 @@ Letter(UInt8)
 
 ### Digit
 
-数字键，携带 ASCII 数字码 48–57（主键盘区 '0'–'9'）。
+数字键，携带 ASCII 数字码 48–57。正常键盘事件优先采用逻辑 keycode；无法映射时再按物理 scancode 解码。
 
 ```cangjie
 Digit(UInt8)
@@ -177,4 +177,5 @@ RawScancode(Int32)
 ## 另请参阅
 
 - [UiEvent](UiEvent.md) — `KeyDown` / `KeyUp` 事件携带本类型。
-- [sdl.input 的 KeyModifiers](input/KeyModifiers.md) — 当前修饰键状态。
+- [UiEventMetadata](UiEventMetadata.md) — 同一事件的物理 scancode、逻辑 keycode 和修饰键快照。
+- [sdl.input 的 KeyModifiers](input/KeyModifiers.md) — 查询调用时刻的全局修饰键状态。

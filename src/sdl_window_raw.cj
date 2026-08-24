@@ -14,6 +14,8 @@ foreign {
 
     func SDL_DestroyWindow(window: CPointer<Unit>): Unit
 
+    func SDL_GetWindowID(window: CPointer<Unit>): UInt32
+
     func SDL_SetWindowTitle(window: CPointer<Unit>, title: CString): Bool
 
     func SDL_GetWindowTitle(window: CPointer<Unit>): CString

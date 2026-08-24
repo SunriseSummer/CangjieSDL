@@ -45,16 +45,30 @@ public struct TextureRenderOptions {
  */
 public class Texture <: Resource {
     internal let ptr: CPointer<Unit>
+    private let owner: RenderDeviceToken
+    private let ownerGeneration: UInt64
     private var closed = false
 
     public let width: Float32
     public let height: Float32
 
-    internal init(ptr: CPointer<Unit>) {
+    internal init(ptr: CPointer<Unit>, owner: RenderDeviceToken) {
         this.ptr = ptr
+        this.owner = owner
+        owner.ensureAccess("create Texture")
+        this.ownerGeneration = owner.currentGeneration()
         var w: Float32 = 0.0
         var h: Float32 = 0.0
-        ensureSdl(unsafe { SDL_GetTextureSize(ptr, inout w, inout h) }, "SDL_GetTextureSize")
+        try {
+            ensureSdl(unsafe { SDL_GetTextureSize(ptr, inout w, inout h) }, "SDL_GetTextureSize")
+        } catch (e: SdlException) {
+            // Ownership transfers to this constructor. If metadata lookup fails, no Texture
+            // instance escapes to own the raw handle, so release it before propagating.
+            if (ptr.isNotNull()) {
+                unsafe { SDL_DestroyTexture(ptr) }
+            }
+            throw e
+        }
         this.width = w
         this.height = h
     }
@@ -94,7 +108,7 @@ public class Texture <: Resource {
 
     /** Whether `close` has already been called; a closed texture throws on reuse. */
     public func isClosed(): Bool {
-        closed
+        closed || !owner.isActive() || ownerGeneration != owner.currentGeneration()
     }
 
     /** Frees the GPU texture (SDL_DestroyTexture); safe to call more than once. */
@@ -102,19 +116,28 @@ public class Texture <: Resource {
         if (closed) {
             return
         }
+        let ownsLiveHandle = owner.isActive() && ownerGeneration == owner.currentGeneration()
+        if (ownsLiveHandle) {
+            owner.ensureAccess("close Texture")
+        }
         closed = true
-        if (ptr.isNotNull()) {
+        if (ptr.isNotNull() && ownsLiveHandle) {
             unsafe { SDL_DestroyTexture(ptr) }
         }
+    }
+
+    internal func isOwnedBy(renderer: Renderer): Bool {
+        refEq(owner, renderer.renderDevice())
     }
 
     /**
      * Throws `SdlException` when a closed texture is reused.
      */
     private func ensureOpen(): Unit {
-        if (closed) {
+        if (closed || !owner.isActive() || ownerGeneration != owner.currentGeneration()) {
             throw SdlException("Texture is already closed.")
         }
+        owner.ensureAccess("use Texture")
     }
 }
 
@@ -123,6 +146,7 @@ extend Renderer {
      * Throws `SdlException` when the source surface is closed or SDL cannot create a texture.
      */
     public func textureFromSurface(surface: Surface): Texture {
+        ensureRenderAccess("create Texture")
         if (surface.isClosed()) {
             throw SdlException("Cannot create texture from a closed surface.")
         }
@@ -130,13 +154,14 @@ extend Renderer {
         if (texture.isNull()) {
             throw SdlException("SDL_CreateTextureFromSurface failed: ${lastSdlError()}")
         }
-        Texture(texture)
+        Texture(texture, renderDevice())
     }
 
     /**
      * Throws `SdlException` when SDL cannot load the image or create a texture from it.
      */
     public func loadTexture(path: String): Texture {
+        ensureRenderAccess("load Texture")
         var texture = CPointer<Unit>()
         try (surface = Surface.load(path)) {
             texture = unsafe { SDL_CreateTextureFromSurface(ptr, surface.ptr) }
@@ -144,15 +169,21 @@ extend Renderer {
         if (texture.isNull()) {
             throw SdlException("SDL_CreateTextureFromSurface failed: ${lastSdlError()}")
         }
-        Texture(texture)
+        Texture(texture, renderDevice())
     }
 
     /**
      * Throws `SdlException` when the texture is closed or SDL cannot render it.
      */
     public func texture(texture: Texture, destination: Rect, source!: ?Rect = None): Unit {
+        if (recordRenderCommand(RenderCommand.DrawTexture(texture, destination, source))) {
+            return
+        }
         if (texture.isClosed()) {
             throw SdlException("Cannot render a closed texture.")
+        }
+        if (!texture.isOwnedBy(this)) {
+            throw SdlException("Cannot render a Texture created by another Renderer.")
         }
         var dst = destination.toSdlFRect()
         match (source) {
@@ -173,8 +204,14 @@ extend Renderer {
         angle: Float64,
         options!: TextureRenderOptions = TextureRenderOptions()
     ): Unit {
+        if (recordRenderCommand(RenderCommand.DrawTextureRotated(texture, destination, angle, options))) {
+            return
+        }
         if (texture.isClosed()) {
             throw SdlException("Cannot render a closed texture.")
+        }
+        if (!texture.isOwnedBy(this)) {
+            throw SdlException("Cannot render a Texture created by another Renderer.")
         }
         var dst = destination.toSdlFRect()
         match ((options.source, options.center)) {

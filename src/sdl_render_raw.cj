@@ -57,15 +57,23 @@ foreign {
 
     func SDL_RenderPoint(renderer: CPointer<Unit>, x: Float32, y: Float32): Bool
 
+    func SDL_RenderPoints(renderer: CPointer<Unit>, points: CPointer<SdlFPoint>, count: Int32): Bool
+
     func SDL_RenderLine(renderer: CPointer<Unit>, x1: Float32, y1: Float32, x2: Float32, y2: Float32): Bool
 
     func SDL_RenderRect(renderer: CPointer<Unit>, rect: CPointer<SdlFRect>): Bool
 
+    func SDL_RenderRects(renderer: CPointer<Unit>, rects: CPointer<SdlFRect>, count: Int32): Bool
+
     func SDL_RenderFillRect(renderer: CPointer<Unit>, rect: CPointer<SdlFRect>): Bool
+
+    func SDL_RenderFillRects(renderer: CPointer<Unit>, rects: CPointer<SdlFRect>, count: Int32): Bool
 
     func SDL_RenderReadPixels(renderer: CPointer<Unit>, rect: CPointer<SdlRect>): CPointer<Unit>
 
     func SDL_GetRenderOutputSize(renderer: CPointer<Unit>, w: CPointer<Int32>, h: CPointer<Int32>): Bool
+
+    func SDL_GetCurrentRenderOutputSize(renderer: CPointer<Unit>, w: CPointer<Int32>, h: CPointer<Int32>): Bool
 
     func SDL_GetRendererName(renderer: CPointer<Unit>): CString
 

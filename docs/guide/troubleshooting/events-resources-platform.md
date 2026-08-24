@@ -6,13 +6,13 @@
 
 ## 可能原因
 
-无响应常因事件未取空、事件分支执行耗时 I/O 或只处理按下不处理抬起；资源错误常因借用超过拥有者、纹理跨 Renderer、重复关闭；平台差异常因把 Option 当必有值、把异步 Pending 当失败、缓存显示器 ID 或调用平台不支持的窗口控制。线程越界也会让这些问题随机出现。
+无响应常因事件未取空、事件分支执行耗时 I/O、多个窗口各自争抢进程级事件队列，或只处理按下不处理抬起；资源错误常因借用超过拥有者、纹理/命令缓冲跨 Renderer、设备 reset 后重放旧资源、重复关闭或越过 Renderer 拥有线程；平台差异常因把 Option 当必有值、把异步 Pending 当失败、缓存显示器 ID 或调用平台不支持的窗口控制。
 
 ## 诊断步骤
 
 ### 症状一：窗口卡住、输入延迟或角色松键后仍移动
 
-为每帧记录处理事件数、耗时和最后事件类型，检查内层循环是否持续调用 `pollEvent` 直到 None。把文件加载和网络工作暂时替换为计数，比较响应是否恢复。下面探针将 KeyDown/KeyUp 转换为状态并打印变化；确认按下和抬起各出现一次，状态最终回到 false。
+为每帧记录处理事件数、耗时和最后事件类型，检查内层循环是否持续调用 `pollEvent` 直到 None。多窗口时确认只有一个 `SdlEventPump` 消费事件，并按 `metadata.windowId` 路由。把文件加载和网络工作暂时替换为计数，比较响应是否恢复。下面探针将 KeyDown/KeyUp 转换为状态并打印变化；确认按下和抬起各出现一次，状态最终回到 false。
 
 ```cangjie role=probe
 case UiEvent.KeyDown(Key.Right, repeat) => {
@@ -40,7 +40,7 @@ draw(window.renderer, state)
 
 ### 症状二：出现“已关闭”、无效纹理或退出时崩溃
 
-列出每个 Resource 的创建、最后使用和关闭位置，检查 Texture 是否由当前窗口 Renderer 创建，Surface 转 Texture 后谁关闭两者，Cursor 是否仍被激活。运行 `isClosed()` 或最小资源测试确认失败点。修复为嵌套 try-with-resources 或集中 Assets 拥有者，退出时先停止循环、关闭 Texture/Cursor，最后关闭窗口。确认异常与正常退出都只执行一次关闭，关闭后没有定时回调继续绘制。
+列出每个 Resource 的创建、最后使用和关闭位置，检查 Texture/RenderCommandBuffer/TextMeasureSession 是否由当前 Renderer 创建、是否在拥有线程调用，Surface 转 Texture 后谁关闭两者，Cursor 是否仍被激活。若刚收到 `RenderTargetsReset`、`RenderDeviceReset` 或 `RenderDeviceLost`，检查旧命令缓冲的 `isReplayable`，并从 CPU 侧资源描述重建 GPU 状态。修复为嵌套 try-with-resources 或集中 Assets 拥有者，退出时先停止循环、关闭 Texture/Cursor，最后关闭窗口。确认异常与正常退出都只执行一次关闭，关闭后没有定时回调继续绘制。
 
 ### 症状三：文件对话框一直 Pending、全屏无匹配或平台信息为空
 
@@ -48,7 +48,7 @@ draw(window.renderer, state)
 
 ## 修复方法
 
-事件问题缩短事件分支并建立工作预算；资源问题收窄所有权并停止关闭后的借用；平台问题保留 Option/结果枚举的全部分支并提供降级。UI 资源操作留在同一线程。任何捕获异常的代码都要把 API 名和 SDL 消息写入状态或日志，不能只返回 false。
+事件问题缩短事件分支并建立工作预算，多窗口统一由 `SdlEventPump` 消费；资源问题收窄所有权、保持 Renderer 线程亲和性，并把设备 reset 当作资源代数失效边界；平台问题保留 Option/结果枚举的全部分支并提供降级。任何捕获异常的代码都要把 API 名和 SDL 消息写入状态或日志，不能只返回 false。
 
 ## 确认已经修复
 
@@ -61,6 +61,8 @@ draw(window.renderer, state)
 ## 相关 API
 
 - [`SdlWindow`](../../api/sdl/SdlWindow.md) 与 [`UiEvent`](../../api/sdl/UiEvent.md)：事件和生命周期。
+- [`SdlEventPump`](../../api/sdl/SdlEventPump.md) 与 [`UiEventRecord`](../../api/sdl/UiEventRecord.md)：多窗口路由和事件时元数据。
+- [`RenderCommandBuffer`](../../api/sdl/RenderCommandBuffer.md)：拥有者、设备代数与 replay 可用性。
 - [`FileDialogRequest`](../../api/sdl/dialogs/FileDialogRequest.md)：异步完成状态。
 - [显示器函数](../../api/sdl/displays/functions.md)：运行时设备枚举。
 - [`Cursor`](../../api/sdl/input/Cursor.md)、[`Surface`](../../api/sdl/Surface.md) 与 [`Texture`](../../api/sdl/Texture.md)：资源边界。

@@ -10,11 +10,11 @@
 
 ## 准备工作
 
-保留首个窗口的事件循环、`beginScene/endScene/present` 和 try-with-resources，只替换场景内部的布局与绘制。确认 `WindowResized` 已调用 `refreshSize()`。先给每个区域算出一个具名 Rect，再绘制；不要在绘制和事件代码中分别散落相同数字。
+保留首个窗口的事件循环、`renderFrame` 和 try-with-resources，只替换绘制体内部的布局与绘制。标准 poll/wait 事件入口会自动同步窗口尺寸与 DPI；先给每个区域算出一个具名 Rect，再绘制，不要在绘制和事件代码中分别散落相同数字。
 
 ## 操作步骤
 
-在 `beginScene` 后、`endScene` 前替换原卡片绘制。外层 `shell` 随当前逻辑尺寸变化，标题栏和按钮从它派生。`pushClip/popClip` 只限制内容区，按钮在裁剪外仍完整可见。软阴影放在卡片之前，描边放在填充之后。
+在 `renderFrame` 的绘制闭包内替换原卡片绘制。外层 `shell` 随当前逻辑尺寸变化，标题栏和按钮从它派生。`pushClip/popClip` 只限制内容区，按钮在裁剪外仍完整可见。软阴影放在卡片之前，描边放在填充之后。
 
 ```cangjie role=patch
 let shell = Rect(28.0, 28.0, width - 56.0, height - 56.0)
