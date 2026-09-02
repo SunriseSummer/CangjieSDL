@@ -2,7 +2,7 @@
 
 # MessageBoxOptions
 
-`sdl.dialogs` 包中的 public struct
+位于 `sdl.dialogs` 包的公开结构体。
 
 自定义消息框的完整描述：标题、正文、级别、按钮列表、按钮方向与可选配色。构造后字段可直接赋值调整；默认带一个绑定回车与 Esc 的"OK"按钮。
 

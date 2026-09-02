@@ -2,7 +2,7 @@
 
 # MouseState
 
-`sdl.input` 包中的 public struct
+位于 `sdl.input` 包的公开结构体。
 
 某一时刻的鼠标快照：指针位置（已按窗口缩放折算为逻辑像素）、左中右三键的按下状态与原始按键掩码。由 [`Mouse.state`](Mouse.md#state) 返回。
 

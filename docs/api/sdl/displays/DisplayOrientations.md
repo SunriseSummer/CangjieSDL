@@ -2,7 +2,7 @@
 
 # DisplayOrientations
 
-`sdl.displays` 包中的 public struct
+位于 `sdl.displays` 包的公开结构体。
 
 显示器的自然朝向与当前朝向的组合。
 

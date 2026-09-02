@@ -2,7 +2,7 @@
 
 # ApplicationMetadata
 
-`sdl.system` 包中的 public class
+位于 `sdl.system` 包的公开类。
 
 应用元数据的写入与查询入口。元数据供操作系统在任务管理器、音量面板等处显示应用信息；在创建窗口之前设置。SDL 无法写入、更新或移除元数据时，方法把失败状态转换为 `SdlException`。
 

@@ -2,7 +2,7 @@
 
 # CpuInfo
 
-`sdl.system` 包中的 public struct
+位于 `sdl.system` 包的公开结构体。
 
 CPU 与内存能力快照：核心数、缓存行、内存与页大小，以及各 SIMD 指令集的可用性。字段全部带默认值（0/`false`），`CpuInfo()` 构造空白值后由 [`cpuInfo`](functions.md#cpuinfo) 填充。
 

@@ -2,7 +2,7 @@
 
 # DisplayMode
 
-`sdl.displays` 包中的 public struct
+位于 `sdl.displays` 包的公开结构体。
 
 显示器可用的分辨率、像素密度与刷新率组合。显示查询会把 SDL 返回的非正像素密度规范化为 1.0；公开构造器原样保存调用者传入的值。
 

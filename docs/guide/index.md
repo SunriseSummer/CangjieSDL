@@ -1,72 +1,84 @@
-# SDL 应用开发指南
+# CangjieSDL 使用指南
 
-SDL 模块是 SDL3 与 SDL3_ttf 的仓颉安全封装，适合自绘桌面工具、轻量媒体程序和 2D 游戏。本指南不把 81 个类型重新排成另一份成员清单，而是围绕真实结果组织：先打开窗口，再建立事件与渲染模型，随后完成多文件计算器和实时游戏，最后接入字体、图片、剪贴板、对话框、文件、显示器、系统信息与部署。精确签名、默认值和异常条件请查独立的 [SDL API 参考](../api/index.md)。
+本指南先建立窗口、事件、绘制和资源的运行模型，再按任务讲解输入、文字、图片和平台能力。精确签名、默认值和异常以 [API 参考](../api/index.md)为准。
 
-## 如何使用这套指南
+## 入门路线
 
-第一次接触 SDL 时，请按“学习路径”连续完成；每页都说明进入时已有的产物、离开时新增的能力和肉眼或终端可见的确认标准。教程给出含包声明、导入和 `main` 的完整程序；how-to 若继承已有程序，会明确指出基页和插入位置；概念页解释为什么这样组织；排错页按症状给出探针、修复与复测。自动门禁、代码块验证责任与真实窗口边界见[验证说明](_verification.md)。
+1. [创建第一个窗口](getting-started/first-window.md)：运行完整程序，认识窗口、事件循环和 `renderFrame`。
+2. [窗口与事件循环](concepts/window-events-lifecycle.md)：理解每一帧的固定顺序，以及单窗口和多窗口的事件所有权。
+3. [逻辑坐标与高 DPI](concepts/render-scene-coordinates.md)：区分逻辑尺寸、窗口坐标、后备像素和超采样。
+4. [资源所有权](concepts/resource-ownership.md)：正确管理窗口、纹理、表面、光标和测量会话。
+5. [多文件计算器](tutorials/multi-file-calculator.md)：把状态、业务逻辑、事件、绘制和主题拆成清晰层次。
 
-如果你正在维护已有项目，可从“按任务查找”直接进入。页面末尾的“相关 API”落到最窄的类型页，不要求先读完整包索引。非视觉能力以输出、退出码、文件或测试断言确认；GUI 能力除编译外还保留真实窗口截图、尺寸、哈希和捕获命令，避免把“能编译”误当成“画面正确”。
+游戏开发可继续阅读[输入事件与持续状态](concepts/input-state.md)、[时间步长与游戏循环](concepts/game-loop-timing.md)和[实时小游戏](tutorials/real-time-game.md)。
 
-## 从这里开始
+## 核心工作模型
 
-开始前需要 `cjpm 1.0.5`、仓颉编译器，以及能访问本仓库 `sdl` 目录的本地路径。Windows 运行可见窗口还需让 `SDL3.dll` 与 `SDL3_ttf.dll` 可被进程加载；首次构建只验证仓颉依赖，首次运行才会验证动态库、显示环境和系统字体。你只需会写包声明、导入、变量和 `match`，不需要预先理解 SDL 的 C 接口。
+一帧通常遵循这条路径：
 
-先留出约二十分钟完成[首个 SDL 窗口](getting-started/first-window.md)。它从一个空目录和两份文件开始，最终显示一个可调整大小、能正常关闭的窗口。成功标准不是“命令没有报错”，而是窗口标题与卡片文字可见、调整尺寸后仍能绘制、点击关闭后终端重新出现提示符。
+> 读取事件 → 更新应用状态 → 计算逻辑布局 → 绘制 → 提交画面
 
-接着按顺序阅读[窗口与事件循环](concepts/window-events-lifecycle.md)、[场景、坐标与高 DPI](concepts/render-scene-coordinates.md)和[绘制图形与布局](how-to/draw-shapes-and-layout.md)。这三页分别回答“输入何时处理”“尺寸怎样换算”和“控件怎样画”。随后阅读[资源所有权](concepts/resource-ownership.md)，再完成[多文件计算器](tutorials/multi-file-calculator.md)。这条路径最终落到真实的 `main.cj`、`state.cj`、`logic.cj`、`loop.cj`、`render.cj` 与 `theme.cj`，不是只停在 `main` 里的核心片段。
+需要长期记住四条边界：
 
-若首个窗口构建失败，立即进入[构建、动态库与字体排错](troubleshooting/build-runtime-fonts.md)，不要一边改依赖一边继续增加绘制代码。窗口可见但画面异常时使用[渲染与截图排错](troubleshooting/render-output.md)；窗口无响应、资源关闭报错或平台能力不同则使用[事件、资源与平台排错](troubleshooting/events-resources-platform.md)。
+- 布局、命中测试和绘制都使用逻辑像素；设备像素只用于诊断和资源分辨率选择。
+- `SdlWindow` 拥有 `Renderer`，渲染器创建的纹理和命令资源不能跨渲染器使用。
+- 渲染 API 只能在渲染器的创建线程调用；后台线程只准备普通应用数据。
+- 系统能力可能不可用，`Option` 和结果枚举的每个分支都应有明确处理。
 
-## 学习路径
+## 概念
 
-### 入门：从空项目到多文件计算器
+| 主题 | 解决的问题 |
+|---|---|
+| [窗口与事件循环](concepts/window-events-lifecycle.md) | 事件、更新、绘制和退出应该按什么顺序执行？ |
+| [逻辑坐标与高 DPI](concepts/render-scene-coordinates.md) | 为什么窗口尺寸、后备像素和渲染倍率不能混用？ |
+| [资源所有权](concepts/resource-ownership.md) | 谁创建、使用和关闭窗口、纹理及其他资源？ |
+| [文字与字体缓存](concepts/text-font-cache.md) | 怎样保证度量与绘制一致，并避免重复塑形？ |
+| [Surface、Texture 与图片](concepts/surface-texture-image.md) | CPU 像素和渲染器纹理分别适合什么场景？ |
+| [输入事件与持续状态](concepts/input-state.md) | 一次事件和跨帧按住状态怎样分工？ |
+| [时间步长与游戏循环](concepts/game-loop-timing.md) | 怎样让更新速度不依赖刷新率？ |
 
-[首个窗口](getting-started/first-window.md) → [窗口与事件循环](concepts/window-events-lifecycle.md) → [场景、坐标与高 DPI](concepts/render-scene-coordinates.md) → [绘制图形与布局](how-to/draw-shapes-and-layout.md) → [资源所有权](concepts/resource-ownership.md) → [多文件计算器](tutorials/multi-file-calculator.md)。完成后，你不仅能画按钮，还能解释事件、状态、业务逻辑和渲染为什么放在不同文件，并能独立增加一个按键而不改动所有层。
+## 任务手册
 
-### 进阶：从输入状态到实时游戏
+### 绘制与资源
 
-从[多文件计算器](tutorials/multi-file-calculator.md)进入[输入事件与持续状态](concepts/input-state.md)、[时间步长与游戏循环](concepts/game-loop-timing.md)和[实时小游戏](tutorials/real-time-game.md)，再用[渲染排错](troubleshooting/render-output.md)与[事件、资源和平台排错](troubleshooting/events-resources-platform.md)完成诊断训练。该路径同时覆盖设计、诊断与扩展：你会把按键边沿变成持续状态，限制异常长帧，并在真实 `thunder`/`contra` 分层中定位新增玩法应落在哪一层。
+- [绘制图形与自适应布局](how-to/draw-shapes-and-layout.md)
+- [排版文字与选择字体](how-to/text-and-fonts.md)
+- [加载图片、绘制纹理并保存截图](how-to/images-textures-screenshot.md)
+- [无窗口测试与渲染计数](how-to/test-headless-and-instrument.md)
 
-### 平台与交付：从诊断探针到发布目录
+### 输入与桌面交互
 
-从[平台诊断工具](tutorials/platform-toolbox.md)开始，依次学习[文本与缓存](concepts/text-font-cache.md)、[文字排版](how-to/text-and-fonts.md)、[Surface 与 Texture](concepts/surface-texture-image.md)、[图片与截图](how-to/images-textures-screenshot.md)、[输入和光标](how-to/input-cursor-drop.md)、[剪贴板与对话框](how-to/clipboard-and-dialogs.md)、[文件与路径](how-to/filesystem-and-paths.md)、[显示器与全屏](how-to/displays-fullscreen-window.md)、[Hints 与元数据](how-to/hints-and-metadata.md)、[时间与电源](how-to/system-time-power.md)、[部署](how-to/deploy-native-runtime.md)和[无窗口测试](how-to/test-headless-and-instrument.md)。
+- [处理输入、光标与拖放](how-to/input-cursor-drop.md)
+- [使用剪贴板、文件对话框与消息框](how-to/clipboard-and-dialogs.md)
+- [查询显示器、控制窗口并切换全屏](how-to/displays-fullscreen-window.md)
 
-## 按任务查找
+### 系统与交付
 
-| 当前目标 | 入口 | 完成后怎样确认 |
-|---|---|---|
-| 从空目录打开窗口 | [首个 SDL 窗口](getting-started/first-window.md) | 卡片可见，窗口可缩放并正常退出 |
-| 理清事件与退出顺序 | [窗口与事件循环](concepts/window-events-lifecycle.md) | 能画出 poll → update → draw 的顺序 |
-| 处理逻辑坐标和高 DPI | [场景、坐标与高 DPI](concepts/render-scene-coordinates.md) | 缩放后布局比例与命中位置一致 |
-| 绘制圆角、渐变、描边和裁剪 | [绘制图形与布局](how-to/draw-shapes-and-layout.md) | 卡片边缘清晰，内容不越过裁剪区 |
-| 完成职责分离的 GUI 工程 | [多文件计算器](tutorials/multi-file-calculator.md) | 鼠标与键盘共用逻辑，六个源文件职责清楚 |
-| 让移动速度不依赖帧率 | [实时小游戏](tutorials/real-time-game.md) | 不同刷新率下移动速度近似相同 |
-| 在无窗口环境读取平台、路径和电源 | [平台诊断工具](tutorials/platform-toolbox.md) | 七项环境字段有输出，命令退出码为 0 |
-| 对齐中英文和数字读数 | [文字与字体](how-to/text-and-fonts.md) | 度量和绘制使用同一字号、样式与字体 |
-| 加载 PNG/BMP、纹理或截图 | [图片、纹理与截图](how-to/images-textures-screenshot.md) | 图片可见，BMP 文件非空且可打开 |
-| 处理键鼠、文本、拖放和光标 | [输入、光标与拖放](how-to/input-cursor-drop.md) | 一次事件与持续状态没有混用 |
-| 接入剪贴板、文件选择和确认框 | [剪贴板与对话框](how-to/clipboard-and-dialogs.md) | Pending、Selected、Canceled、Failed 都有分支 |
-| 选择配置、资源和用户文件目录 | [文件系统与路径](how-to/filesystem-and-paths.md) | 输出路径属于预期目录且文件信息可读 |
-| 查询显示器并切换全屏 | [显示器、窗口和全屏](how-to/displays-fullscreen-window.md) | 模式来自当前显示器，退出全屏可恢复 |
-| 设置应用身份与 SDL Hint | [Hints 与元数据](how-to/hints-and-metadata.md) | 设置发生在窗口创建前并可读回 |
-| 区分墙钟、性能计时和电源策略 | [系统、时间与电源](how-to/system-time-power.md) | 输出包含日期、耗时和可选电量 |
-| 打包 Windows 原生依赖 | [部署原生运行库](how-to/deploy-native-runtime.md) | 干净目录中的程序仍能启动 |
-| 为布局和缓存写快速测试 | [无窗口测试与计数](how-to/test-headless-and-instrument.md) | 断言退出码为 0，视觉测试仍单独执行 |
-| 定位 DLL、字体或依赖失败 | [构建、动态库与字体排错](troubleshooting/build-runtime-fonts.md) | 最小探针明确失败阶段 |
-| 定位空白、模糊、裁剪或截图 | [渲染与截图排错](troubleshooting/render-output.md) | 修复后画面和文件均可观察 |
-| 定位无响应、关闭错误或平台差异 | [事件、资源与平台排错](troubleshooting/events-resources-platform.md) | 输入恢复、资源只关闭一次、能力重新查询 |
+- [管理文件系统与应用路径](how-to/filesystem-and-paths.md)
+- [设置应用元数据与 SDL Hints](how-to/hints-and-metadata.md)
+- [使用系统信息、时间与电源状态](how-to/system-time-power.md)
+- [部署 SDL 原生运行库](how-to/deploy-native-runtime.md)
 
-## 核心概念
+## 完整教程
 
-七个概念页组成稳定的工作模型：[窗口与事件循环](concepts/window-events-lifecycle.md)说明每帧顺序；[场景、逻辑坐标与高 DPI](concepts/render-scene-coordinates.md)说明布局尺寸如何落到像素；[资源所有权](concepts/resource-ownership.md)说明谁负责关闭；[文字度量与缓存](concepts/text-font-cache.md)说明排版和性能；[Surface 与 Texture](concepts/surface-texture-image.md)说明 CPU 像素与渲染资源；[输入事件与持续状态](concepts/input-state.md)说明边沿和电平；[时间步长与帧循环](concepts/game-loop-timing.md)说明不同刷新率下的稳定更新。
+- [构建多文件计算器](tutorials/multi-file-calculator.md)：桌面工具的职责划分与输入闭环。
+- [构建实时小游戏](tutorials/real-time-game.md)：持续输入、时间步长、更新和绘制。
+- [构建平台诊断工具](tutorials/platform-toolbox.md)：在创建窗口前检查运行环境。
 
-## API 参考
+## 排错
 
-需要准确成员时使用 [SDL API 参考](../api/index.md)。先按问题选择包：窗口和事件查 [`sdl`](../api/sdl/index.md)，剪贴板查 [`sdl.input`](../api/sdl/input/index.md)，对话框查 [`sdl.dialogs`](../api/sdl/dialogs/index.md)，显示器查 [`sdl.displays`](../api/sdl/displays/index.md)，文件、时间与系统信息查 [`sdl.system`](../api/sdl/system/index.md)。
+- [构建、动态库与字体](troubleshooting/build-runtime-fonts.md)
+- [渲染、坐标与截图](troubleshooting/render-output.md)
+- [事件、资源与平台能力](troubleshooting/events-resources-platform.md)
 
-进入核心包后，窗口生命周期落到 [`SdlWindow`](../api/sdl/SdlWindow.md) 和 [`UiEvent`](../api/sdl/UiEvent.md)，绘制落到 [`Renderer`](../api/sdl/Renderer.md)，图片资源落到 [`Surface`](../api/sdl/Surface.md) 与 [`Texture`](../api/sdl/Texture.md)。这样先做读者决策，再看具体类型，不把一段说明堆成标识符列表。
+## API 快速入口
 
-## 故障排查
+- [窗口、事件、绘制、文字和图片](../api/sdl/index.md)
+- [键鼠、剪贴板和光标](../api/sdl/input/index.md)
+- [消息框与文件对话框](../api/sdl/dialogs/index.md)
+- [显示器与全屏模式](../api/sdl/displays/index.md)
+- [路径、文件、时间和系统信息](../api/sdl/system/index.md)
 
-先按发生阶段选择页面。编译期、启动期或字体初始化失败看[构建、动态库与字体](troubleshooting/build-runtime-fonts.md)；窗口已出现但空白、模糊、被裁剪或截图错误看[渲染与输出](troubleshooting/render-output.md)；窗口无响应、输入滞后、资源关闭后仍被使用、对话框不返回或全屏模式不兼容看[事件、资源与平台](troubleshooting/events-resources-platform.md)。每个症状分支都要求运行具体探针并确认可观察结果，不以“检查配置”结束。
+## 文档质量
+
+[文档验证说明](_verification.md)列出了公开 API、链接、代码示例、库测试和示例工程的检查方法。所有仓颉示例都必须是可独立编译的完整程序；API 声明则与源码公开面自动对照。

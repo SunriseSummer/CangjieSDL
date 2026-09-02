@@ -2,7 +2,7 @@
 
 # ApplicationPaths
 
-`sdl.system` 包中的 public class
+位于 `sdl.system` 包的公开类。
 
 应用相关目录的查询入口：可执行文件所在目录、当前目录、按组织/应用名生成的首选项目录，以及标准用户目录。返回 `String` 的 `currentDirectory` / `preferencePath` 在 SDL 无法解析目录时抛出 `SdlException`；返回 `?String` 的 `basePath` / `userFolder` 以 `None` 表示不可用。
 

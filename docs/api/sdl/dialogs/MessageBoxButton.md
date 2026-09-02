@@ -2,7 +2,7 @@
 
 # MessageBoxButton
 
-`sdl.dialogs` 包中的 public struct
+位于 `sdl.dialogs` 包的公开结构体。
 
 消息框中的一个按钮：标签、返回给调用者的编号，以及是否绑定回车/Esc 快捷键。
 

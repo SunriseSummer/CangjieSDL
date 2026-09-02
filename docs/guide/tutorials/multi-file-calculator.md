@@ -23,7 +23,7 @@
 1. 先把下面完整程序放进新示例的主源文件。它提供数字 1、2、3、加号、等号和清除按钮，同时支持键盘文本输入。
 2. 运行后用鼠标依次输入“12 + 3 =”；再按清除按钮，用键盘输入相同序列。两条路径必须得到同一结果。
 3. 转到仓库的计算器示例运行真实多文件版本，按状态、逻辑、事件、渲染的顺序追踪一次按键。
-4. 选择一个近迁移任务：在真实版本中加入 `00` 键或按下反馈，只改必要层，并再次运行。
+4. 选择一个小练习：在真实版本中加入 `00` 键或按下反馈，只改必要层，并再次运行。
 
 ## 完整程序
 
@@ -142,20 +142,7 @@ main(): Unit {
 
 ## 接着试一试
 
-在真实 `examples/calculator` 中给按钮增加按下反馈。状态层新增 `pressedLabel`，`MouseDown` 设置，`MouseUp` 清除；渲染层只根据该值把对应矩形下移。下面是事件与绘制边界的核心变化，实际实现时仍保留原有文件分工。
-
-```cangjie role=variation
-case UiEvent.MouseDown(MouseButton.Left, x, y) => state.pressedLabel = labelAt(state, x, y)
-case UiEvent.MouseUp(MouseButton.Left, _, _) => state.pressedLabel = None<String>
-
-let drawBox = if (state.pressedLabel == Some(button.label)) {
-    button.rect.shift(0.0, 3.0)
-} else {
-    button.rect
-}
-```
-
-确认按下时只有视觉位置变化，运算仍由 `press` 处理；拖出按钮再松开也会清除状态。这个练习要求改状态、事件和渲染三个明确位置，正好检验你是否理解多文件边界。
+在真实 `examples/calculator` 中给按钮增加按下反馈：状态层新增 `pressedLabel`，`MouseDown` 记录命中的标签，`MouseUp` 清除；渲染层只在标签匹配时把对应矩形下移 3 个逻辑像素。确认按下时只有视觉位置变化，运算仍由 `press` 处理，拖出按钮再松开也会清除状态。这个练习会同时触及状态、事件和渲染三个明确位置，正好检验多文件边界是否清楚。
 
 ## 如果没有成功
 

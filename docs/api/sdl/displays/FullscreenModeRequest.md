@@ -2,7 +2,7 @@
 
 # FullscreenModeRequest
 
-`sdl.displays` 包中的 public struct
+位于 `sdl.displays` 包的公开结构体。
 
 查找最接近的全屏显示模式时的期望参数：目标分辨率、刷新率与是否考虑高像素密度模式。
 

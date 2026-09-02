@@ -1,22 +1,22 @@
-# 仓颉跨平台图形接口库
+# CangjieSDL
 
-CangjieSDL 是对跨平台多媒体库 [SDL](https://github.com/libsdl-org) 的轻量安全封装，当前聚焦于图形接口，提供窗口、GPU 二维绘制、纹理管理、文本、事件、剪贴板、原生对话框、显示器查询和系统设施等。可用于开发图形软件、数据可视化与 2D 游戏等。
+CangjieSDL 是 [SDL 3](https://github.com/libsdl-org/SDL) 与 SDL_ttf 的仓颉封装，面向桌面图形软件、数据可视化和 2D 游戏。公开 API 使用仓颉类型表达，不暴露 C 指针；窗口布局、输入事件和绘制统一使用逻辑像素。
 
 ## 核心能力
 
 - 窗口创建、状态控制、DPI 缩放、垂直同步与超采样抗锯齿。
 - 线条、矩形、圆角矩形、圆、凸多边形、渐变、虚线边框和阴影。
-- 不可变绘制命令缓冲与持久目标局部 damage，支持 GUI display list 重放和增量绘制。
+- 不可变绘制命令缓冲、可替换的子命令槽和局部重绘，适合上层 GUI 框架实现增量绘制。
 - 基于 SDL3_ttf 的 UTF-8 文本绘制、度量、居中、旋转和字体注册。
 - BMP/PNG 表面与纹理、旋转/镜像绘制、纹理三角带。
 - 捕获键盘、鼠标、文本、滚轮、拖放与窗口事件。
 - 剪贴板、系统光标、消息框、文件对话框、显示器与系统信息。
 
-## 文档与示例
+## 从哪里开始
 
-- [入门指南](docs/guide/index.md)
-- [API 手册](docs/api/index.md)
-- [示例应用](examples/)
+- 第一次使用：阅读[使用指南](docs/guide/index.md)，从可运行窗口开始建立事件、绘制和资源模型。
+- 查询精确签名：使用 [API 参考](docs/api/index.md)。
+- 查看完整工程：运行 [`calculator`](examples/calculator)、[`thunder`](examples/thunder) 或 [`contra`](examples/contra)。
 
 ## 环境要求
 
@@ -43,10 +43,12 @@ cjpm test
 
 执行 `cjpm init` 新建仓颉项目，在 `cjpm.toml` 中配置依赖本包，然后在 `src/main.cj` 中写入代码：
 
-```cangjie
+```cangjie verify role=complete profile=gui-visual
+package docexample
+
 import sdl.{Color, Pen, Rect, SdlWindow, UiEvent, WindowSpec}
 
-main() {
+main(): Unit {
     try (window = SdlWindow(WindowSpec("Hello CangjieSDL", 800, 600))) {
         var running = true
         while (running) {
@@ -78,7 +80,7 @@ main() {
 }
 ```
 
-执行 `cjpm run` 即可运行查看效果。`renderFrame` 执行异常安全的 begin → draw → resolve → present 事务；绘制体抛错时仍恢复 render target、scale 与 clip，但不会呈现残缺帧。需要在 resolve 与 present 之间截图或剖析时改用 [`RenderPass`](docs/api/sdl/RenderPass.md)。`SdlWindow` 实现仓颉 `Resource`，正常和异常退出都自动释放窗口及渲染资源。
+执行 `cjpm run` 即可查看效果。每一帧先处理完事件，再更新状态并绘制。`renderFrame` 负责开始场景、完成离屏解析和提交；绘制代码抛出异常时会恢复渲染状态，但不会提交残缺画面。`SdlWindow` 实现仓颉 `Resource`，因此正常和异常退出都会释放窗口及其渲染器。
 
 ## 许可证
 

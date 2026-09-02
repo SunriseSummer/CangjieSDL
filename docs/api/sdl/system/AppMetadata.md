@@ -2,7 +2,7 @@
 
 # AppMetadata
 
-`sdl.system` 包中的 public struct
+位于 `sdl.system` 包的公开结构体。
 
 一组应用元数据：名称、版本、标识符、开发者、版权、主页与类别，全部可选。交给 [`ApplicationMetadata.apply`](ApplicationMetadata.md#apply) 一次性应用。
 

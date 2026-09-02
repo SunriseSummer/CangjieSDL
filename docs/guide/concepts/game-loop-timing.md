@@ -16,28 +16,7 @@
 
 一帧开始读取 `now`，用 `now - last` 得到毫秒差并除以 1000 转成秒，然后夹在 0 到 0.05。先处理事件，让本帧输入可见；再更新运动、刷新计时器和粒子；随后做碰撞与结算；最后绘制稳定状态并提交。`delay` 只控制空转，不进入运动公式。
 
-下面的反例按固定帧位移，并把延时当作准确时钟。
-
-```cangjie role=contrast
-while (running) {
-    player.x += 4.0
-    updateEnemies()
-    draw()
-    window.delay(UInt32(16))
-}
-```
-
-稳定结构显式测量经过时间，并限制长帧。
-
-```cangjie role=trace
-let now = window.ticks()
-let dt = clampF32(Float32(now - lastTicks) / 1000.0, 0.0, 0.05)
-lastTicks = now
-handleEvents(window, state)
-update(state, dt)
-resolveCollisions(state)
-draw(window.renderer, state)
-```
+不要把“每帧移动 4 像素”或 `delay(16)` 当成时间模型。正确顺序是：读取 `window.ticks()`，计算 `now - lastTicks`，除以 1000 得到秒，再用 `clampF32` 限制长帧；随后依次处理事件、执行 `update(state, dt)`、结算碰撞并绘制。完整实现见[实时小游戏](../tutorials/real-time-game.md)。
 
 ## 选择与取舍
 

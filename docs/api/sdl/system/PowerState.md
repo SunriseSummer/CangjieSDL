@@ -2,7 +2,7 @@
 
 # PowerState
 
-`sdl.system` 包中的 public enum
+位于 `sdl.system` 包的公开枚举。
 
 设备的供电状态，出现在 [`PowerInfo.state`](PowerInfo.md#state) 中。
 

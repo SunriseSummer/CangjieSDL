@@ -2,7 +2,7 @@
 
 # SdlException
 
-`sdl` 包中的 public class
+位于 `sdl` 包的公开类。
 
 SDL 调用失败、参数非法或资源已关闭时，本模块会抛出 `SdlException`。异常消息说明失败的操作；SDL 调用失败时还会附带 `SDL_GetError` 返回的错误文本。
 

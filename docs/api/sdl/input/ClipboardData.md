@@ -2,7 +2,7 @@
 
 # ClipboardData
 
-`sdl.input` 包中的 public struct
+位于 `sdl.input` 包的公开结构体。
 
 一段二进制剪贴板数据及其 MIME 类型，供 [`Clipboard.setData`](Clipboard.md#setdata) 批量提交给其他桌面应用。
 

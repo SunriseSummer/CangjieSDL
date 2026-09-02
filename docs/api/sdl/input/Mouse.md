@@ -2,7 +2,7 @@
 
 # Mouse
 
-`sdl.input` 包中的 public class
+位于 `sdl.input` 包的公开类。
 
 鼠标的轮询式查询与捕获控制。事件式的鼠标输入经 [`UiEvent`](../UiEvent.md) 到达；这里的 [`state`](#state) 适合每帧读取的即时状态（拖动、悬停跟踪）。SDL 拒绝更改鼠标捕获状态时，`capture` 把失败状态转换为 `SdlException`。
 

@@ -14,25 +14,7 @@
 
 ## 操作步骤
 
-窗口创建后先设置最小尺寸和宽高比，再打印显示信息。按 F 的具体物理键可用 `Key.Letter(UInt8(70))` 匹配；切换失败时捕获并显示错误，不要让应用丢失退出能力。
-
-```cangjie role=patch
-window.setMinimumSize(640, 360)
-window.setAspectRatio(16.0 / 10.0, 16.0 / 9.0)
-let display = primaryDisplayInfo()
-println("display=${display.name}")
-match (display.modes.current) {
-    case Some(mode) => println("mode=${mode.width}x${mode.height}@${mode.refreshRate}")
-    case None => println("current mode unavailable")
-}
-
-case UiEvent.KeyDown(Key.Letter(code), false) =>
-    if (code == UInt8(70)) {
-        fullscreen = !fullscreen
-        window.setFullscreen(fullscreen)
-        window.sync()
-    }
-```
+窗口创建后先调用 `setMinimumSize(640, 360)` 和 `setAspectRatio(16.0 / 10.0, 16.0 / 9.0)`。通过 `primaryDisplayInfo()` 读取显示器名称，并匹配 `display.modes.current`；`None` 表示平台没有提供当前模式，不是程序错误。按 F 时切换布尔状态，调用 `setFullscreen` 后再用 `sync()` 等待操作落地。失败时显示错误，但仍保留退出路径。
 
 窗口运行时可查询 `pixelDensity()`、`displayScale()`、`safeArea()` 和 flags 解释设备状态。设置透明度、置顶、边框或进度条时，只在业务需要时调用，并提供恢复操作。
 
@@ -46,15 +28,7 @@ case UiEvent.KeyDown(Key.Letter(code), false) =>
 
 ## 可以继续修改
 
-枚举当前显示器全屏模式，并选择最接近 1280×720、60Hz 的模式；没有结果时保留桌面全屏，不把 None 当成异常。
-
-```cangjie role=variation
-let request = FullscreenModeRequest(1280, 720, refreshRate: 60.0, includeHighDensityModes: true)
-match (closestFullscreenDisplayMode(display.id, request)) {
-    case Some(mode) => status = "候选 ${mode.width}x${mode.height}@${mode.refreshRate}"
-    case None => status = "没有匹配模式，保留桌面全屏"
-}
-```
+用 `FullscreenModeRequest(1280, 720, refreshRate: 60.0, includeHighDensityModes: true)` 描述目标，再把当前显示器 ID 传给 `closestFullscreenDisplayMode`。得到模式时显示宽高和刷新率；返回 `None` 时保留桌面全屏，不应抛出异常。
 
 ## 相关 API
 

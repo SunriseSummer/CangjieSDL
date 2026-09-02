@@ -14,7 +14,7 @@
 
 在应用目录运行 `cjpm build`，检查错误是否发生在依赖解析。核对依赖路径最终指向含 `sdl/cjpm.toml` 的目录，而不是 `src` 或 `.sdl3`。把程序缩成下面探针，只调用包级版本函数；若仍不能编译，问题与窗口、字体和显示器无关。确认标准是构建退出码为 0，运行能打印正版本值。
 
-```cangjie role=probe
+```cangjie verify role=complete
 package guide_examples
 
 import sdl.{sdlRevision, sdlVersion}
@@ -27,7 +27,7 @@ main(): Unit {
 
 依赖修复后，用完整窗口烟雾帧代替只导入探针，确保核心类型和渲染入口能解析。这个修复程序仍只画一帧并立即释放，便于把运行库问题和长期事件循环分开。确认退出码为 0，并在桌面短暂看到窗口。
 
-```cangjie role=fix
+```cangjie verify role=complete profile=gui-visual
 package guide_examples
 
 import sdl.{Color, SdlWindow, WindowSpec}

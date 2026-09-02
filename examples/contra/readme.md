@@ -1,32 +1,25 @@
-# Neon Commando：骨骼动画横版动作射击示例
+# Neon Commando 教程：组织中型 2D 动作游戏
 
-`Neon Commando` 是一个向经典横版动作射击游戏致意的单关示例，也是一份面向教学的中型
-仓颉与 SDL 工程范例。关卡包含高低平台、断桥、水域、步兵、炮台、无人机、扩散枪补给
-与多弹幕 Boss；主角有五格生命，每次受击扣除一格，击毁终点的丛林核心即可通关。
+`Neon Commando` 是一个单关横版动作射击示例。它包含平台、水域、步兵、炮台、无人机、扩散枪补给和
+Boss，但真正值得学习的是：如何把 2500 多行实时游戏代码组织成依赖清晰的 7 个包，并让输入、模拟、
+骨骼求值、资源管理与分层渲染各自保持明确职责。
 
 ![Neon Commando 运行效果](../.images/contra.png)
 
-## 你将学会
+## 学完以后
 
-- 把约 2800 行游戏代码拆成依赖单向流动的多子包工程。
-- 分离输入、世界模拟、骨架求值、资源管理和分层渲染。
-- 用解析式 IK、连续参数动画和纹理三角带实现轻量 2D 骨骼动画。
-- 在中型项目中集中管理调参、配色与跨包可见性。
+你应该能够：
 
-## 演示要点
+- 画出各包的依赖方向，并解释为什么 `sim` 与 `render` 不应互相调用；
+- 沿一项功能跨越输入、状态、模拟、姿态和渲染层定位代码；
+- 分离世界坐标与屏幕坐标，让镜头移动不污染游戏规则；
+- 用 `Resource` 集中管理纹理，不在重开一局时重复加载 GPU 资源；
+- 理解双骨 IK、每帧姿态求值和纹理三角带蒙皮如何组成轻量 2D 骨骼动画。
 
-示例集中演示两处在小型样例中不常见的工程内容：
+开始前建议先完成 [Thunder Fighter 教程](../thunder/)。本示例沿用它的可变 `dt`、持续输入、实体集合和
+碰撞系统，不再从头解释这些基础概念。
 
-1. 轻量 2D 骨骼动画：主角不使用逐帧整身贴图，而由项目内置的骨骼运行时，以脊柱自由度、
-   四肢解析式 IK、线性混合蒙皮与关节交叉淡化，统一驱动奔跑、腾空、落地、下蹲、翻转与
-   连续瞄准。
-2. 分层的多子包工程结构：约 2800 行代码按职责拆成 7 个仓颉包，依赖单向流动，演示如何
-   组织一个避免单文件承载全部逻辑的游戏项目。
-
-定步长帧循环、按键持续状态与集中配置沿用示例集通用的结构约定（见
-[示例总览](../README.md#通用模式)），后文重点讲解本示例特有的分层架构与骨骼动画。
-
-## 构建与运行
+## 运行和操作
 
 从仓库根目录执行：
 
@@ -36,178 +29,218 @@ cjpm build
 cjpm run
 ```
 
-运行时需要 `SDL3.dll` 与 `SDL3_ttf.dll`，部署方式见 [示例总览](../README.md#运行时动态库)。
-
-## 操作
-
 | 动作 | 按键 |
 |---|---|
-| 移动 / 键盘八向瞄准 / 蹲下 | 方向键或 `WASD` |
-| 键盘射击 | `K`（按住连射） |
-| 跳跃 | 空格；起跳后快速连按可逐级跳得更高 |
-| 鼠标瞄准与射击 | 移动鼠标连续瞄准，按住左键连射 |
+| 左右移动 | 方向键或 `A` / `D` |
+| 键盘瞄准 | 方向键或 `WASD`；可与射击组合成八向瞄准 |
+| 键盘射击 | 按住 `K` |
+| 跳跃 | 空格；起跳后在短时间内再次按下可逐级增加高度 |
+| 鼠标瞄准和射击 | 移动鼠标连续瞄准，按住左键连射 |
+| 下蹲 | 在地面按住下方向或 `S` |
 | 重新挑战 | 结算界面按 `Enter` 或 `R` |
 | 退出 | `Esc` |
 
-键盘方向可与 `K` 组合，实现向上、斜向与空中向下射击；蹲下时按住 `W`（可再叠加左右方向）
-即为蹲姿斜上或竖直射击。反向移动时，身体、双臂与枪械在同一帧完成翻身。鼠标模式下，
-枪械以骨架握点为旋转轴连续转动，双手通过 IK 分别锁定握把与护木；按住 `S` 蹲下不会中断
-鼠标瞄准，可保持任意角度蹲姿射击。绿色 `S` 补给会将步枪升级为三向扩散枪。
+绿色 `S` 补给会把步枪升级为三向扩散枪。若动态库或纹理加载失败，请先查看
+[示例总览的构建和运行说明](../README.md#构建和运行)。
 
-## 工程结构：分层子包
+## 不要逐文件通读：先看依赖层次
 
-代码按依赖层次拆成 7 个包。依赖只能自上而下（上层可用下层，下层绝不反向依赖），
-因此不存在循环包依赖，每一层都能单独理解与替换。
+项目由根包和 6 个子包组成。`sim` 与 `render` 是同级消费者：前者修改世界，后者按约定只读取世界；它们
+都可以使用更低层能力，但不能互相依赖。
 
-```
-  contra            (根/应用外壳)  main、帧循环、键鼠事件
-      │  依赖 ↓
-  contra.render     场景渲染         入口 view、环境、实体、主角、蒙皮、HUD、资源
-  contra.sim        世界模拟         update、玩家、敌人、特效、碰撞结算
-      │
-  contra.rig        骨骼动画运行时    pose、脊柱、腿、臂(每帧解出一副 HeroSkeleton)
-      │
-  contra.model      实体与世界        实体数据、GameState、关卡编队、种类判定
-      │
-  contra.config     集中调参 + 调色板   ┐  两个无游戏依赖的叶子包
-  contra.geom       2D 数学 + 骨骼原语 + IK ┘  (geom 可原样复用到其他项目)
+```text
+contra（应用外壳：窗口、事件、帧循环）
+├─ contra.sim（玩家、敌人、特效、碰撞）
+├─ contra.render（场景、角色、纹理、HUD）
+│       │
+│       ├──────────────┐
+│       ↓              ↓
+├─ contra.rig（姿态与 IK）
+├─ contra.model（实体与世界状态）
+└─ contra.geom + contra.config（数学/骨骼原语 + 配置/配色）
 ```
 
-| 包 / 文件 | 职责 |
+图中上下位置表达职责层次，不代表每一层只依赖紧邻一层。实际导入以源码为准，但总体方向始终从应用和功能
+包流向基础包，不会反向形成循环。
+
+| 包 | 主要文件 | 稳定职责 |
+|---|---|---|
+| `contra` | [`main.cj`](src/main.cj)、[`loop.cj`](src/loop.cj) | 创建资源、接收事件、串联一帧 |
+| `contra.config` | [`specs.cj`](src/config/specs.cj)、[`palette.cj`](src/config/palette.cj) | 集中保存尺寸、速度、冷却和颜色 |
+| `contra.geom` | [`vector.cj`](src/geom/vector.cj)、[`math.cj`](src/geom/math.cj)、[`joint.cj`](src/geom/joint.cj)、[`ik.cj`](src/geom/ik.cj) | 2D 数学、骨骼原语和双骨 IK |
+| `contra.model` | [`kinds.cj`](src/model/kinds.cj)、[`entities.cj`](src/model/entities.cj)、[`world.cj`](src/model/world.cj) | 类型、实体数据、世界状态和关卡编队 |
+| `contra.rig` | [`pose.cj`](src/rig/pose.cj)、[`spine.cj`](src/rig/spine.cj)、[`legs.cj`](src/rig/legs.cj)、[`arms.cj`](src/rig/arms.cj) | 从玩家状态求出一帧骨架 |
+| `contra.sim` | [`update.cj`](src/sim/update.cj)、[`player.cj`](src/sim/player.cj)、[`foes.cj`](src/sim/foes.cj)、[`effects.cj`](src/sim/effects.cj)、[`collision.cj`](src/sim/collision.cj) | 推进游戏世界并完成规则结算 |
+| `contra.render` | [`view.cj`](src/render/view.cj)、[`environment.cj`](src/render/environment.cj)、[`actors.cj`](src/render/actors.cj)、[`hero.cj`](src/render/hero.cj)、[`skinning.cj`](src/render/skinning.cj)、[`hud.cj`](src/render/hud.cj)、[`assets.cj`](src/render/assets.cj) | 坐标转换、分层绘制和纹理生命周期 |
+
+## 第一课：先追踪完整的一帧
+
+从 [`runGame`](src/loop.cj) 开始。它计算被限制在 0 到 0.04 秒之间的可变 `dt`，然后依次执行：
+
+```text
+handleEvents → contra.sim.update → contra.render.draw
+```
+
+[`contra.sim.update`](src/sim/update.cj) 是模拟层唯一的逐帧入口。它先更新时间、粒子和震屏；若游戏仍在
+进行，再依次推进玩家、镜头、子弹、敌人和补给，最后处理碰撞。一次性的跳跃输入在帧末清除，持续输入则
+保留到对应的 `KeyUp` 或 `MouseUp`。
+
+[`contra.render.draw`](src/render/view.cj) 是渲染层入口。它按背景、水面、地形、补给、敌人、子弹、玩家、
+粒子、准星和 HUD 的顺序绘制。更新和绘制只通过 `GameState` 交接，不直接调用彼此。
+
+掌握这三个入口后，再深入任何功能都不会失去方向。
+
+## 第二课：让状态成为层与层之间的契约
+
+[`GameState`](src/model/world.cj) 保存一局游戏的全部可变数据：玩家、输入、地形、实体集合、阶段、分数、
+镜头、时间和震屏强度。职责约定如下：
+
+- 根包把设备事件写入 `InputState`；
+- `contra.sim` 根据输入和 `dt` 修改世界；
+- `contra.rig` 根据 `Player` 计算当帧姿态，不修改游戏规则；
+- `contra.render` 读取状态和姿态生成画面。
+
+这种边界让“规则”与“表现”可以独立变化。例如，受击无敌由模拟层判断，而闪烁由渲染层表现；枪口位置由
+骨架约束求出，射击和枪口火焰共用它，从而避免视觉枪口与子弹出生点分离。
+
+### 跨包可见性
+
+仓颉顶层声明默认是 `internal`，兄弟包不能直接访问。因此跨包使用的类型、字段和函数显式标为
+`protected`，把可见范围限制在当前模块内。
+
+可见性应随层次收窄：基础包提供较多可复用原语，功能包只暴露少量入口。例如，`contra.rig` 对外主要提供
+`HeroSkeleton`、`evaluateHeroSkeleton` 和 `weaponMuzzlePoint`；`contra.sim` 对外只需要逐帧 `update`。
+这不是语法负担，而是让依赖关系可以被编译器检查的接口设计。
+
+## 第三课：沿“输入到射击”走一遍纵向链路
+
+这是理解项目最有效的一条路线：
+
+1. [`loop.cj`](src/loop.cj) 把键盘和鼠标事件写入 `InputState`。真实按下而非系统重复时，键盘操作才会
+   从鼠标瞄准切回键盘瞄准。
+2. [`targetPlayerAim`](src/sim/player.cj) 把键盘方向转换为离散单位向量，或把鼠标位置转换为连续瞄准向量。
+3. [`updatePlayerAim`](src/sim/player.cj) 让鼠标瞄准平滑逼近目标；键盘瞄准则立即响应。
+4. [`evaluateHeroSkeleton`](src/rig/pose.cj) 根据朝向、瞄准、移动、下蹲和腾空状态求出整副骨架。
+5. [`weaponMuzzlePoint`](src/rig/arms.cj) 从握枪约束得到枪口位置。
+6. [`firePlayerWeapon`](src/sim/player.cj) 在这个位置生成单发或三向子弹。
+7. [`drawHeroRig`](src/render/hero.cj) 使用同一副骨架绘制身体、双臂、枪械和枪口火焰。
+
+一项功能跨越多个包并不是坏事。关键在于每层只回答一个问题：设备发生了什么、玩家意图是什么、游戏规则
+产生什么结果、身体应该是什么姿态、最终如何绘制。
+
+## 第四课：分离世界坐标与屏幕坐标
+
+地形、玩家、敌人和子弹都保存在世界坐标中。镜头只影响表现，不修改实体的真实位置。
+[`worldX`](src/render/view.cj) 用“世界 X - 镜头 X + 震屏偏移”得到屏幕 X，`screenRect` 对矩形执行同样转换。
+
+这条边界带来三个直接收益：
+
+- 碰撞、关卡触发和敌人 AI 始终在稳定的世界坐标中计算；
+- 镜头平滑跟随或 Boss 区锁定只改变 `cameraX`；
+- 屏幕震动只影响最终坐标，不会让实体在逻辑世界中抖动。
+
+调试镜头问题时，先确认数据属于哪种坐标系。不要在模型层提前减去 `cameraX`，也不要拿已经转换过的屏幕
+矩形参与世界碰撞。
+
+## 第五课：把纹理生命周期放在渲染边界
+
+[`GameAssets`](src/render/assets.cj) 在窗口创建后一次性加载背景、角色部件、枪械和敌兵纹理，并设置透明
+混合模式。它实现 `Resource`，在 [`main.cj`](src/main.cj) 的嵌套资源作用域中确定性关闭。
+
+`resetGame` 只重建玩家和关卡状态，不重新加载纹理。这样“重开一局”是业务状态重置，不是 GPU 资源重建。
+`GameAssets.close()` 还通过 `closed` 保证重复关闭安全，并按明确顺序释放纹理。
+
+资源路径相对于运行时工作目录，所以应从 `examples/contra` 执行 `cjpm run`。若要发布独立程序，需要同时
+设计资源目录和 SDL 动态库的部署位置。
+
+## 第六课：从连续状态求出一副骨架
+
+这个示例不使用整身逐帧贴图。每帧都由 [`evaluateHeroSkeleton`](src/rig/pose.cj) 从 `Player` 的位置、速度、
+朝向、瞄准和融合权重求出新的 `HeroSkeleton`：
+
+```text
+Player 连续状态
+   ↓
+脊柱姿态（骨盆、腹、胸、头）
+   ├─→ 双腿目标 → 双骨 IK
+   └─→ 双臂目标 → 双骨 IK + 持枪约束
+   ↓
+HeroSkeleton
+   ↓
+分层贴图 + texturedStrip 蒙皮
+```
+
+骨架本身不保存跨帧动画状态。移动相位、落地融合、后坐力等连续量保存在玩家状态中，因此姿态求值是从状态到
+骨架的明确转换，天然支持左右镜像和任意瞄准角。
+
+### 双骨 IK 为什么需要极点
+
+[`solveTwoBoneWithPole`](src/geom/ik.cj) 已知根关节、末端目标和两段骨长，用余弦定理解出中间关节。仅有
+这些数据时，中间关节可以向连线两侧弯曲；额外的 `pole` 指定膝盖或肘部应位于哪一侧，避免瞄准方向变化时
+关节突然翻面。目标超出臂展时，距离会被夹到可达范围，肢体自然伸直。
+
+双腿在 [`legs.cj`](src/rig/legs.cj) 中把步态拆成 62% 支撑相和 38% 摆动相，移动距离累积为动画相位；腾空、
+落地与下蹲使用不同的脚部目标。双臂在 [`arms.cj`](src/rig/arms.cj) 中分别锁定握把和护木，让枪械、双手和
+弹道共享同一组约束。
+
+### 蒙皮怎样消除肘膝硬接缝
+
+[`skinning.cj`](src/render/skinning.cj) 沿一条两段骨链生成纹理三角带。关节附近的顶点位置、切向和宽度通过
+`smoothStep` 在两根骨骼之间混合，使轮廓连续弯曲。上、下段纹理还在关节附近重叠，下段透明度平滑渐入，
+从而减弱两张美术切片的明暗硬缝。髋部使用相同思路，把大腿顶部以柔边叠回腰带下缘。
+
+这套实现展示了底层绘制接口的价值：`texturedStrip` 提供几何、纹理坐标和逐顶点透明度，项目可以在框架之上
+构建自己的动画渲染器，而不受限于内置精灵能力。
+
+## 四条推荐阅读路线
+
+不要一次读完 27 个源码文件。按目标选择一条路线：
+
+| 想理解什么 | 阅读路径 |
 |---|---|
-| `contra` · `main.cj` | 窗口创建与资源生命周期 |
-| `contra` · `loop.cj` | 定步长帧循环、键鼠事件到输入状态的转换 |
-| `contra.config` | 画布/角色/敌人/特效/HUD 的全部调参与像素调色板 |
-| `contra.geom` | 插值/角度、向量/AABB、骨骼原语与关节工具、双骨解析 IK |
-| `contra.model` | 枚举与种类判定、实体数据袋、世界状态与关卡编队 |
-| `contra.rig` | 顶层编排、脊柱姿态、双腿 IK 与步态、双臂 IK 与持枪约束 |
-| `contra.sim` | 逐帧模拟入口、玩家物理与战斗、敌人 AI、镜头/子弹/粒子、碰撞结算 |
-| `contra.render` | 渲染入口与坐标工具、场景、实体、主角分层、四肢蒙皮、HUD、纹理资源 |
-| `assets/commando_parts_v2.png` | 主角躯干、四肢、战靴和装饰透明分层图集 |
-| `assets/commando_hands.png` | 扳机手、护木手及后坐力姿态透明图集 |
+| 一帧怎样推进 | `loop.cj → sim/update.cj → render/view.cj` |
+| 射击为何与枪口一致 | `loop.cj → sim/player.cj → rig/pose.cj + rig/arms.cj → render/hero.cj` |
+| 受击和重生怎样结算 | `sim/collision.cj → model/entities.cj → model/world.cj → render/hud.cj` |
+| 镜头和场景怎样协作 | `sim/effects.cj → render/view.cj → render/environment.cj` |
 
-推荐先读根包的 `main.cj` 与 `loop.cj`，再从 `contra.model` 认识世界状态。之后任选一条纵向链路
-阅读，例如“玩家输入 → `contra.sim/player.cj` → `contra.rig` → `contra.render/hero.cj`”。这样能
-始终带着一个具体问题穿过各层，比逐目录通读更容易建立整体认识。
+每条路线都先看公开入口和数据，再看辅助数学。阅读结束后，应该能说出每一步的输入、输出和所属坐标系。
 
-### 跨子包可见性
+## 动手练习
 
-顶层声明默认只在本包及其子包内可见（`internal`）。本示例是单模块可执行程序，包之间
-是兄弟关系，因此凡是被其他包用到的类型、函数、字段乃至结构体的 `static let` 常量，都要
-显式标注 `protected`（模块内可见）。这是将大工程拆包时需要注意的一点。
+### 练习 1：只通过配置调整手感
 
-基础包 `contra.geom`、`contra.config` 对外符号几乎全为 `protected`，供上层广泛取用；越靠近
-顶层编排的包，接口面越收窄：`contra.rig` 对外只暴露 `HeroSkeleton`、`evaluateHeroSkeleton`
-与 `weaponMuzzlePoint`，`contra.sim` 只暴露逐帧入口 `update`，`contra.render` 也仅暴露绘制
-入口 `draw` 与资源句柄 `GameAssets`。接口面越窄的包越易于理解与维护。
+修改 [`config/specs.cj`](src/config/specs.cj) 的奔跑速度、跳跃速度或扩散角。验收时确认无需修改模拟与渲染
+代码，且相同参数只在一处定义。
 
-## 骨骼动画
+### 练习 2：新增一种敌人
 
-主角不使用逐帧整身贴图。`contra.rig` 是一套轻量 2D 骨骼动画运行时，每帧从玩家的连续状态
-（位置、速度、朝向、瞄准与各种融合权重）重新解算出一副骨架。骨骼数据模型是 `contra.geom`
-中的四个原语：`RigPoint`、`RigBone`、`RigLimb` 与 `RigChain`。
+按数据 → 规则 → 表现的顺序修改：
 
-### 每帧解出一副骨架
+1. 在 `contra.model` 增加敌人种类、尺寸、生命和分值；
+2. 在 `contra.sim/foes.cj` 增加移动或射击规则；
+3. 在 `contra.render/actors.cj` 增加外观；
+4. 在 `world.cj` 放入关卡编队。
 
-运行时不保留任何跨帧动画状态，也不依赖固定帧率，因此天然可插值、可镜像。顶层编排
-`evaluateHeroSkeleton` 先解脊柱，挂上骨盆、腹、胸、头，再解双腿与双臂，最后组装成一副
-`HeroSkeleton`：
+验收时确认新敌人能生成、受击、销毁和计分，并且没有让 `model` 反向依赖 `sim` 或 `render`。
 
-```cangjie
-protected func evaluateHeroSkeleton(player: Player): HeroSkeleton {
-    let body = evaluateHeroBody(player)
-    let pelvis = RigBone(body.hip, mirroredAngle(body.pelvisAngle, body.facing))
-    let abdomen = RigBone(body.abdomenBase, mirroredAngle(body.abdomenAngle, body.facing))
-    let chest = RigBone(body.chestBase, mirroredAngle(body.chestAngle, body.facing))
-    let head = RigBone(body.neck, mirroredAngle(body.headAngle, body.facing))
-    let rearLeg = evaluateHeroLeg(player, body, false)
-    let frontLeg = evaluateHeroLeg(player, body, true)
-    let arms = evaluateHeroArms(player, body)
+### 练习 3：增加翻滚姿态
 
-    HeroSkeleton(
-        body.facing,
-        body.hip,
-        pelvis,
-        abdomen,
-        chest,
-        head,
-        rearLeg,
-        frontLeg,
-        arms.rearArm,
-        arms.frontArm,
-        arms.weaponGrip
-    )
-}
-```
+先在玩家状态和模拟层定义进入条件、时长与碰撞规则，再在 `contra.rig` 把脊柱、四肢目标按连续权重融合，
+最后检查渲染。至少验证左右朝向、起止过渡、空中禁用和受击行为，不能只看一张静止姿态。
 
-一副 `HeroSkeleton` 由脊柱四段（骨盆、腹、胸、头）、双腿双臂四条骨链与一个握枪点组成，
-渲染层只读不改。奔跑、腾空、下蹲、落地、翻身与连续瞄准都由这一套求值统一驱动。以下各节
-依次说明双腿与双臂的 IK、四肢蒙皮的接缝融合，以及由脊柱统一完成的姿态、瞄准与手感。
+### 练习 4：复用几何与 IK
 
-### 双腿：IK 与步态
+用 `contra.geom` 的 `RigPoint`、`RigBone` 和 `solveTwoBoneWithPole` 做一条跟随鼠标的机械臂。新实验不应
+导入 `contra.model`、`contra.sim` 或 `contra.render`，以验证基础包确实可以独立复用。
 
-双腿使用髋—膝—踝双段 IK，并带独立的战靴末端。步态拆成 62% 支撑相与 38% 摆动相，并加入
-脚跟到脚尖的滚动。奔跑相位由实际位移累积得到，不依赖世界坐标或固定帧率；步幅与抬脚高度
-使用连续曲线，停步、转向与速度变化都不会跳帧。腾空时上升段双腿向臀下收拢，下落段前腿
-前伸准备落地。
+## 验证清单
 
-### 双臂：IK 与持枪约束
+- 键盘与鼠标能平稳切换，按键自动重复不会反复抢占瞄准模式；
+- 站立、下蹲、奔跑、上升和下落时，双手仍锁定枪械，弹道从可见枪口发出；
+- 左右朝向、水平和大角度瞄准时，肘膝不会突然翻面；
+- 镜头跟随、Boss 区锁定和震屏不改变世界碰撞结果；
+- 跌落、受击、通关、失败和重新挑战都能完整重置业务状态，纹理不会重复加载；
+- 所有纹理透明度和前后遮挡正确，关闭窗口和按 `Esc` 都能正常退出。
 
-双臂使用肩—肘—腕双段 IK：前景手臂握住手枪式握把并扣扳机，后侧手臂跨过胸前、从枪管下方
-托住前护木（上臂在躯干后、前臂在躯干前，构成真实的遮挡层级），翻身时保持相同的人体层级。
-肩关节锚点对齐躯干贴图自带的三角肌，使前臂自然从肩窝长出而非贴在胸前；肘部极点跟随枪管
-下侧，平射时双肘下垂、仰射时肘部前抬、俯射时收向身后。
-
-枪托平射时贴住肩窝，仰俯角越陡越向体前滑出，以保证竖直向上或向下射击时枪身避开头部与
-大腿。枪口火焰、视觉枪管末端与子弹出生点共享同一个经朝向修正的枪口约束，左右镜像完全
-对称。
-
-### 蒙皮与接缝融合
-
-大腿/小腿与大臂/小臂采用 2D 线性混合蒙皮渲染（`sdl` 的 `texturedStrip`）：两段贴图沿共享
-骨链铺设为三角条带，关节混合区内的顶点按 smoothstep 权重混合两根骨骼的刚体变换，并共享
-同一宽度剖面。上下两段在膝/肘处各向对方延伸一段重叠带（纹理随之轻微拉伸），上段作不透明
-底、下段在重叠带内以 smoothstep 渐入盖住。即便两段美术图接缝处明暗不连续，也被这条渐变带
-混合抹平，肘膝呈连续圆角弯曲，没有刚体拼接的割裂、色调硬缝或穿模。
-
-髋部同理处理刚性腰带与摆动大腿之间的接缝：腰带绘制后，把大腿顶部沿骨轴、以与主条带一致
-的纹理映射重绘在腰带下沿，透明度自腰带下缘向上渐隐为 0，使大腿以柔边自然探入腰带下方；
-腰带扣与弹袋位于渐隐区之上，不受影响。
-
-### 姿态、瞄准与手感
-
-头部、胸腔与腹部按不同权重跟随瞄准俯仰，蹲姿降低重心并加大前倾，瞄准动作由整条脊柱协同
-完成。地面姿态采用前后脚错位、膝部微屈、骨盆稳定与胸腔前倾的战术警戒站姿；移动时加入
-骨盆反向扭转与更低的重心。待机呼吸、步态重心、落地压缩、后坐力与头巾摆动均为连续参数
-动画。
-
-鼠标瞄准使用平滑响应与翻身滞回，避免指针掠过角色中心时左右抖动；键盘切向则采用同步响应，
-消除躯干与武器翻转不同步。跳跃提供 110 ms 离地宽容与 120 ms 输入缓冲，同时保留快速连按
-增高的机制。
-
-## 关键实现
-
-- 所有运动以秒为单位并截断异常长帧，速度不依赖显示器刷新率。
-- 世界坐标与屏幕坐标分离（见 `render/view.cj` 的 `worldX`/`screenRect`），镜头平滑跟随并在
-  Boss 区自动锁定。
-- 角色判定框小于视觉轮廓，受击后有短暂无敌；跌落水域只扣一格生命，并从最近的检查点返回。
-- 全部可调数值集中在 `contra.config`，不散写魔法数：更换配色只改 `palette.cj`，调整平衡只改
-  `specs.cj`。
-- 背景、主角、敌兵与枪械采用统一的半写实像素风格，轻量特效与 HUD 由代码实时绘制。
-
-## 扩展方向
-
-可按由小到大的顺序扩展：
-
-1. 调参（只改 `contra.config`）：修改跳跃高度、扩散枪弹道角、敌人刷新密度，体会集中配置的
-   作用。
-2. 新增一种敌人：在 `contra.model` 的 `EnemyKind`/`enemySpec`/`enemyPoints` 加一档，在
-   `contra.sim/foes.cj` 编写它的 AI，在 `contra.render/actors.cj` 绘制它，正好走一遍数据、
-   逻辑、渲染三层。
-3. 新增一个姿态：例如冲刺或翻滚，在 `contra.rig` 中为脊柱、腿、臂加一组目标姿态并用连续
-   权重融合。
-4. 复用 `contra.geom`：它不依赖任何游戏类型，可整包移植到其他项目作为 2D 骨骼与 IK 工具箱。
-
-扩展后至少完整走通一次开始、战斗、受击、结算和重新挑战流程；涉及角色绘制时同时验证左右
-朝向、站立/下蹲和空中状态，避免只在单一姿态下看似正确。动态库与分发问题见
-[部署、动态库与 FFI](../../docs/deployment-and-ffi.md)。
+修改后先执行 `cjpm build`，再完整走通开始、移动、射击、受击、补给、Boss、结算和重新挑战流程。自动构建
+不能替代骨骼接缝、透明混合、输入手感和不同姿态下的视觉验收。

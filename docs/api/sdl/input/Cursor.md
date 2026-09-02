@@ -2,7 +2,7 @@
 
 # Cursor
 
-`sdl.input` 包中的 public class
+位于 `sdl.input` 包的公开类。
 
 一个原生鼠标光标对象，加上光标显隐的静态控制。经 [`system`](#system) 从系统形状创建，[`setActive`](#setactive) 生效；[`close`](#close) 会先切回默认光标再销毁，避免活动光标指向已释放的对象。SDL 无法创建、切换或显示/隐藏光标时，方法把失败状态转换为 `SdlException`。
 

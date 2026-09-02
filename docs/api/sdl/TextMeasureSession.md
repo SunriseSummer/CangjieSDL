@@ -2,7 +2,7 @@
 
 # TextMeasureSession
 
-`Renderer.textMeasureSession` 创建的同串文本测量资源。会话只建立一次 UTF-8 原生缓冲并固定字体/字号/样式，适合段落逐行适配；用完必须 `close()`，且不得活过所属 `Renderer`。
+`Renderer.textMeasureSession` 创建的文字测量资源。会话只准备一次 UTF-8 数据，并固定字体、字号和样式，适合为同一段文字反复测量范围、寻找换行位置或定位光标。使用后必须 `close()`，且不能超过所属 `Renderer` 的生命周期。
 
 ```cangjie
 public class TextMeasureSession <: Resource {
@@ -15,8 +15,8 @@ public class TextMeasureSession <: Resource {
 }
 ```
 
-- `fit` 返回指定起点后不宽于 `maxWidth` 的最宽 UTF-8 前缀；真实后端以边界对齐的有限 shaping window 起步，只有整窗容纳时才扩张，避免长余串的重复整段处理。
+- `fit` 返回指定起点后不超过 `maxWidth` 的最宽 UTF-8 前缀。实现从有限范围开始，只有当前范围可以完整容纳时才继续扩展，避免重复处理整段剩余文字。
 - `measure` 测量一个精确字节范围。
-- `hitTest` 由 SDL_ttf 已 shaping 的 cluster 直接返回最近 UTF-8 插入边界及 cluster 矩形；真实后端避免长行点击时逐前缀测量，也正确覆盖连字与 RTL 视觉方向。
+- `hitTest` 返回离指定坐标最近的 UTF-8 插入位置，以及命中字形簇的矩形。它不需要逐个测量文字前缀，也能处理连字和从右向左文字。
 - 起点与终点若切开 UTF-8 码点会抛 `IllegalArgumentException`；关闭后调用会抛 `IllegalStateException`。
-- `fit` 返回码点安全边界，不承诺 UAX #14 合法断点；`hitTest` 则返回 shaping cluster 边界。上层段落断行仍须处理组合字符、ZWJ、区域指示符和语言标点规则。
+- `fit` 只保证结果位于 UTF-8 码点边界，不保证符合语言换行规则。上层排版仍需处理组合字符、ZWJ、区域指示符和标点规则。

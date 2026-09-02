@@ -2,9 +2,9 @@
 
 # Keyboard
 
-`sdl.input` 包中的 public class
+位于 `sdl.input` 包的公开类。
 
-键盘的轮询式查询入口，当前提供修饰键状态。事件式的按键输入经 [`UiEvent.KeyDown`](../UiEvent.md#keydown) / [`KeyUp`](../UiEvent.md#keyup) 到达。
+键盘的轮询式查询入口，当前提供修饰键状态。事件式按键输入通过 [`UiEvent.KeyDown` 和 `KeyUp`](../UiEvent.md) 到达。
 
 ## 声明
 

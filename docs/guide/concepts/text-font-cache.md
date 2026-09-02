@@ -10,34 +10,19 @@
 
 按钮居中、读数右对齐和省略号都依赖真实文字宽度。把“每个字符 8 像素”写死，对英文也不准确，对中文、粗体和混合脚本更会明显错位。`textWidth`、`textHeight`、`textCenter` 和 `text` 使用同一个 SDL3_ttf 后端，只有参数一致，测量结果才代表最终画面。
 
-默认字体从平台常见 UI 字体中选择；没有任何受支持字体时，窗口初始化会失败并报告错误，而不是悄悄使用难以阅读的位图字。应用可用 `Fonts.registerFamily` 给名字绑定主字体和有序缺字 fallback 链；各项按相同字号与样式打开，最后再落到平台 UI 字体。路径打不开时，渲染器会记住失败并回退，避免每帧重复尝试。粗体优先查找同家族粗体文件，没有时再使用合成效果。
+默认字体从平台常见 UI 字体中选择；没有任何可用字体时，窗口初始化会失败并报告错误。应用可用 `Fonts.registerFamily` 给名称绑定主字体和按顺序尝试的缺字回退字体；这些字体使用相同字号和样式，最后再回退到平台 UI 字体。路径无法打开时，渲染器会记录失败并改用后续字体，避免每帧重复尝试。粗体优先使用同字体家族的粗体文件，没有时再使用合成效果。
 
 ## 工作模型
 
 一次文字请求由四个关键参数决定：字符串、字号、`FontStyle` 和字体名或路径。度量缓存按这些条件及 `Fonts.revision()` 分开；重新注册同名字体后，现有 Renderer 会安全清理字体相关度量与旋转文字缓存。普通与粗体不会误用同一宽度；旋转文字还会缓存可复用纹理。场景缩放时缓存保存 `pointSize × scaleY` 对应的原生字体度量，再除以当前 `scaleX/scaleY` 返回逻辑结果；同一个实际栅格字号因此只计算一次，同时非均匀缩放仍按各轴正确映射。每次 `endScene` 仍恢复帧间逻辑缩放。`textMeasureCount` 记录度量调用，`textComputeCount` 记录真正计算次数，`textShapeCount` 与 `textDrawCount` 帮助区分重复布局和重复绘制。
 
-同一长字符串需要多次适配、范围测量或光标命中时，用 `textMeasureSession` 一次建立 UTF-8 原生缓冲和 shaping 结果。`fit` 给出码点安全的宽度前缀，但不代替 UAX #14 断行规则；`hitTest` 直接使用 shaping cluster，能正确处理连字和 RTL 视觉方向。不要通过不断测量从头到光标的前缀来做二分命中，这会重复 shaping，并可能把光标放进 cluster 中间。
+同一长字符串需要多次适配、范围测量或光标命中时，用 `textMeasureSession` 一次建立 UTF-8 缓冲和字形布局结果。`fit` 给出码点安全的宽度前缀，但不代替语言换行规则；`hitTest` 使用字形簇边界，能正确处理连字和从右向左文字。不要通过反复测量字符串前缀来查找光标，这会重复文字布局，还可能把光标放进字形簇中间。
 
-下面的对比用默认样式测量，却用粗体绘制，右边界会漂移。
-
-```cangjie role=contrast
-let width = renderer.textWidth(value, pointSize: FontSizes.DISPLAY)
-renderer.text(value, right - width, y, color,
-    pointSize: FontSizes.DISPLAY, style: FontStyle(bold: true))
-```
-
-正确做法先保存同一个样式，并在度量与绘制中重复使用。
-
-```cangjie role=trace
-let style = FontStyle(bold: true)
-let width = renderer.textWidth(value, pointSize: FontSizes.DISPLAY, style: style, font: Some("ui"))
-renderer.text(value, right - width, y, color,
-    pointSize: FontSizes.DISPLAY, style: style, font: Some("ui"))
-```
+右对齐时，先保存一个 `FontStyle`，再把同一个字号、样式和字体参数同时传给 `textWidth` 与 `text`。若测量使用默认样式、绘制却使用粗体，右边界必然漂移。
 
 ## 选择与取舍
 
-系统 UI 字体减少分发负担，适合普通桌面工具；应用自带字体能保持品牌一致，但要确认授权、文件路径、CJK/emoji 覆盖和发布目录。fallback 顺序应从字形风格最接近的字体到覆盖范围最广的字体，避免每个脚本落到不同视觉比例；注册应在主线程、首次渲染前完成。统一使用 `FontSizes` 的 CAPTION、BODY、CONTROL、TITLE、DISPLAY 有助于形成层级；特殊标题可用自定义字号，但不要让每个控件随意发明一个值。
+系统 UI 字体减少分发负担，适合普通桌面工具；应用自带字体能保持品牌一致，但要确认授权、文件路径、中文与表情字符覆盖和发布目录。回退顺序应从字形风格最接近的字体排到覆盖最广的字体，避免不同文字使用差异过大的比例。字体注册应在主线程、首次渲染前完成。统一使用 `FontSizes` 的 `CAPTION`、`BODY`、`CONTROL`、`TITLE` 和 `DISPLAY` 有助于形成清楚层级。
 
 缓存适合重复 HUD、按钮标签和静态标题。不断生成带时间戳的长字符串会降低命中率；此时应先判断是否真的需要每帧更新。`clearTextTextureCache` 能释放旋转文字等纹理缓存，但频繁清空会抵消缓存收益。headless 渲染器的文字度量是确定性替代值，适合结构测试，不代表真实字体像素或最终宽度。
 
@@ -57,7 +42,7 @@ renderer.text(value, right - width, y, color,
 - [`FontStyle`](../../api/sdl/FontStyle.md)：粗体、斜体、下划线和删除线组合。
 - [`FontSizes`](../../api/sdl/FontSizes.md)：常用文字层级。
 - [`Fonts`](../../api/sdl/Fonts.md)：命名字体注册与查询。
-- [`TextMeasureSession`](../../api/sdl/TextMeasureSession.md)：长串范围测量、适配与 cluster 命中。
+- [`TextMeasureSession`](../../api/sdl/TextMeasureSession.md)：长串范围测量、适配与字形簇命中。
 
 ## 下一步
 

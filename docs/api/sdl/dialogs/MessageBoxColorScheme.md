@@ -2,7 +2,7 @@
 
 # MessageBoxColorScheme
 
-`sdl.dialogs` 包中的 public struct
+位于 `sdl.dialogs` 包的公开结构体。
 
 消息框的整套配色：背景、文字、按钮边框、按钮底色与选中按钮。是否生效取决于平台原生消息框的支持程度。
 

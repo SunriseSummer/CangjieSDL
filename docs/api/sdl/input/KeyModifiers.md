@@ -2,7 +2,7 @@
 
 # KeyModifiers
 
-`sdl.input` 包中的 public struct
+位于 `sdl.input` 包的公开结构体。
 
 某一时刻的修饰键状态：把 SDL 修饰键掩码展开为逐项布尔字段，左右同键合并（左 Shift 或右 Shift 都算 `shift`），另有跨平台的 `command` 便捷位（Ctrl 或 GUI 键任一按下）。由 [`Keyboard.modifiers`](Keyboard.md#modifiers) 返回。
 

@@ -1,4 +1,4 @@
-[sdl](../index.md) › sdl
+[API 参考](../index.md) › sdl
 
 # sdl
 
@@ -6,85 +6,88 @@
 import sdl.*
 ```
 
-核心包：窗口与渲染器、事件解码、二维几何类型、文本与字体、纹理与表面。应用从 [`WindowSpec`](WindowSpec.md) 创建 [`SdlWindow`](SdlWindow.md)，经 [`SdlWindow.pollEvent`](SdlWindow.md#pollevent) 消费 [`UiEvent`](UiEvent.md)，通过窗口自带的 [`Renderer`](Renderer.md) 绘制。全部坐标为逻辑像素；API 以仓颉类型表达，不暴露 C 指针。
+核心包提供窗口、事件、二维绘制、文字、图片和资源管理。应用通常从 `WindowSpec` 与 `SdlWindow` 开始，在事件循环中更新状态，再通过窗口自带的 `Renderer` 绘制。
 
-## 类型
-
-**类**
+## 窗口与事件
 
 | 类型 | 说明 |
 |---|---|
-| [`SdlException`](SdlException.md) | SDL 调用失败、参数非法或资源已关闭时，本模块会抛出 `SdlException`。 |
-| [`Fonts`](Fonts.md) | 进程级注册表，把应用字体名映射到字体文件路径，类似 CSS 的 `@font-face` 表。 |
-| [`Renderer`](Renderer.md) | 窗口的二维绘制入口：绘制几何、文本和纹理，并管理视口与裁剪。 |
-| [`RenderCommandBuffer`](RenderCommandBuffer.md) | Renderer 录制的不可变值命令 display list，可校验资源/epoch 后按原 z 序透明重放。 |
-| [`RenderCommandSlot`](RenderCommandSlot.md) | 可原子替换子命令缓冲的稳定层次引用，使祖先列表无需复制子命令。 |
-| [`RenderPass`](RenderPass.md) | 异常安全的场景 begin/end 资源。 |
-| [`SdlEventPump`](SdlEventPump.md) | 多窗口应用的进程级事件队列所有者。 |
-| [`TextMeasureSession`](TextMeasureSession.md) | 为同一字符串复用 UTF-8 缓冲与字体的范围/前缀测量资源。 |
-| [`SdlWindow`](SdlWindow.md) | 与自己的渲染器成对创建、成对关闭的 SDL 窗口。 |
-| [`Surface`](Surface.md) | CPU 侧的 RGBA 像素缓冲，包装 SDL_Surface：可新建、从 BMP/PNG 文件加载、逐像素写入并存回 BMP 文件。 |
-| [`Texture`](Texture.md) | GPU 侧图像资源，由渲染器创建（`loadTexture` / `textureFromSurface`），经 `Renderer.texture` / `textureRotated` / `texturedStrip` 绘制。 |
+| [`WindowSpec`](WindowSpec.md) | 窗口标题、逻辑尺寸、DPI、缩放、垂直同步和超采样配置。 |
+| [`SdlWindow`](SdlWindow.md) | 拥有原生窗口与渲染器，并提供事件、尺寸、计时和窗口控制。 |
+| [`SdlEventPump`](SdlEventPump.md) | 在多窗口应用中统一消费并路由进程级事件。 |
+| [`UiEvent`](UiEvent.md) | 已解码的退出、窗口、键鼠、文字和拖放事件。 |
+| [`UiEventRecord`](UiEventRecord.md) | 事件与事件发生时的时间、窗口和键盘元数据。 |
+| [`UiEventMetadata`](UiEventMetadata.md) | 原生事件元数据的仓颉快照。 |
+| [`EventKeyModifiers`](EventKeyModifiers.md) | 事件发生时的修饰键快照。 |
+| [`Key`](Key.md) | 导航键、功能键、字母、数字和原始键码。 |
+| [`MouseButton`](MouseButton.md) | 鼠标按键。 |
+| [`FrameInfo`](FrameInfo.md) | 总运行时间和相邻帧间隔。 |
+| [`WindowDisplayMetrics`](WindowDisplayMetrics.md) | 内容缩放、像素密度和总渲染缩放。 |
+| [`WindowFlags`](WindowFlags.md) | 当前窗口状态标志。 |
+| [`WindowPosition`](WindowPosition.md) | 窗口在桌面坐标系中的位置。 |
+| [`WindowBorderSize`](WindowBorderSize.md) | 窗口边框和标题栏占用的空间。 |
+| [`WindowAspectRatio`](WindowAspectRatio.md) | 窗口宽高比约束。 |
+| [`WindowFlash`](WindowFlash.md) | 窗口或任务栏提醒方式。 |
+| [`WindowProgressState`](WindowProgressState.md) | 任务栏进度状态。 |
 
-**结构体**
-
-| 类型 | 说明 |
-|---|---|
-| [`Color`](Color.md) | 8 位通道的 RGBA 颜色。 |
-| [`FontSizes`](FontSizes.md) | 渲染器与应用共用的标准字号常量集合（点值）。 |
-| [`FontStyle`](FontStyle.md) | 叠加在基础 UI 字体上的文本样式：字重、倾斜与两种线条修饰。 |
-| [`FrameInfo`](FrameInfo.md) | 以毫秒计的帧计时信息：`elapsedMs` 为 SDL 初始化以来的总时长，`deltaMs` 为距上一帧的间隔。 |
-| [`EventKeyModifiers`](EventKeyModifiers.md) | 键盘事件发生时的 Shift/Ctrl/Alt/GUI 修饰键快照。 |
-| [`Insets`](Insets.md) | 逻辑像素下的四边间距——内边距、外边距、留白。 |
-| [`Pen`](Pen.md) | 一次描边的描述：线条/轮廓的宽度与颜色。 |
-| [`Point`](Point.md) | 逻辑像素坐标系中的一个位置——布局、事件与绘制共用的坐标空间。 |
-| [`Rect`](Rect.md) | 逻辑像素下的轴对齐矩形——原点 `x`/`y` 加宽高 `w`/`h`，用于布局框、命中测试与裁剪。 |
-| [`RenderCommandBufferStats`](RenderCommandBufferStats.md) | 命令、clip、资源、估算内存与重放次数诊断。 |
-| [`RenderSamplingStats`](RenderSamplingStats.md) | 当前采样倍率、计划目标尺寸、RGBA8 字节成本与硬件边长诊断。 |
-| [`Size`](Size.md) | 逻辑像素下的宽高尺寸，用于窗口尺寸查询与布局测量的返回值。 |
-| [`SurfaceStyle`](SurfaceStyle.md) | 一块圆角面板的外观描述：填充色、边框色与宽度、圆角半径、阴影色与垂直偏移。 |
-| [`TextFitResult`](TextFitResult.md) | 文本前缀适配的逻辑宽度与 UTF-8 字节长度。 |
-| [`TextHitResult`](TextHitResult.md) | shaped cluster 命中及最近插入边界。 |
-| [`UiEventMetadata`](UiEventMetadata.md) | 从原生事件复制的时间、窗口、物理/逻辑键与修饰键元数据。 |
-| [`UiEventRecord`](UiEventRecord.md) | 事件与事件时刻 window/key/modifier 元数据快照。 |
-| [`TextureRenderOptions`](TextureRenderOptions.md) | `Renderer.textureRotated` 的可选项集合：源区域裁剪、旋转中心与镜像方式。 |
-| [`WindowAspectRatio`](WindowAspectRatio.md) | 窗口宽高比约束的上下界，由 `SdlWindow.aspectRatio` 返回。 |
-| [`WindowBorderSize`](WindowBorderSize.md) | 窗口装饰（标题栏与边框）在四个方向占用的像素数，由 `SdlWindow.borderSize` 返回。 |
-| [`WindowFlags`](WindowFlags.md) | 窗口状态标志位快照：把 SDL 的 64 位标志掩码展开为逐项布尔字段，同时保留原始掩码。 |
-| [`WindowDisplayMetrics`](WindowDisplayMetrics.md) | 动态 DPI 四层尺度：内容缩放、像素密度、总渲染缩放和 SDL 显示缩放。 |
-| [`WindowPosition`](WindowPosition.md) | 窗口左上角在屏幕坐标系中的位置，由 `SdlWindow.position` 返回。 |
-| [`WindowSpec`](WindowSpec.md) | 创建窗口时的一次性选项：标题、逻辑尺寸、DPI 与缩放行为、垂直同步和渲染器的超采样倍数。 |
-
-**枚举**
+## 绘制与增量重放
 
 | 类型 | 说明 |
 |---|---|
-| [`IconName`](IconName.md) | 内置矢量图标的名称，交给 `drawIcon` 在 24×24 的坐标网格上绘制圆头线条图标。 |
-| [`ImageFileFormat`](ImageFileFormat.md) | `Surface` 能读写的图像文件格式。 |
-| [`Key`](Key.md) | 导航键按物理位置解码，字母/数字优先采用布局相关逻辑 keycode 的按键枚举。 |
-| [`MouseButton`](MouseButton.md) | 解码后的鼠标按键；左/中/右之外的按键以 `RawCode` 携带 SDL 的按键码到达。 |
-| [`RenderSamplingStatus`](RenderSamplingStatus.md) | Renderer 采用超采样、直接绘制或资源降级的原因。 |
-| [`TextureBlendMode`](TextureBlendMode.md) | 纹理绘制时与目标像素的混合方式，对应 SDL 的 SDL_BLENDMODE_*。 |
-| [`TextureFlip`](TextureFlip.md) | 旋转绘制纹理时的镜像方式，作为 `TextureRenderOptions` 的一项传入 `Renderer.textureRotated`。 |
-| [`UiEvent`](UiEvent.md) | 解码后的 SDL 输入事件，按到达顺序交给应用处理。 |
-| [`WindowFlash`](WindowFlash.md) | 任务栏/窗口闪烁请求的方式，传给 `SdlWindow.flash`。 |
-| [`WindowProgressState`](WindowProgressState.md) | 原生任务栏进度指示的状态（Windows 任务栏按钮的进度条），经 `SdlWindow.setProgressState` 设置。 |
+| [`Renderer`](Renderer.md) | 场景提交、几何、文字、纹理、裁剪、视口和截图入口。 |
+| [`RenderPass`](RenderPass.md) | 保证场景能够正确结束的资源边界。 |
+| [`RenderCommandBuffer`](RenderCommandBuffer.md) | 可校验并重复播放的不可变绘制命令。 |
+| [`RenderCommandSlot`](RenderCommandSlot.md) | 可替换的子命令引用，用于稳定父结构下的局部更新。 |
+| [`RenderCommandBufferStats`](RenderCommandBufferStats.md) | 命令数量、资源、批处理、内存估算和重放次数。 |
+| [`RenderSamplingStats`](RenderSamplingStats.md) | 当前采样倍率、目标尺寸、内存估算和回退原因。 |
+| [`RenderSamplingStatus`](RenderSamplingStatus.md) | 直接绘制、超采样或降级的状态。 |
+| [`Color`](Color.md) | 8 位 RGBA 颜色。 |
+| [`Pen`](Pen.md) | 描边宽度和颜色。 |
+| [`Point`](Point.md) | 逻辑坐标点。 |
+| [`Size`](Size.md) | 逻辑宽高。 |
+| [`Rect`](Rect.md) | 逻辑矩形及常用几何运算。 |
+| [`Insets`](Insets.md) | 四边间距。 |
+| [`SurfaceStyle`](SurfaceStyle.md) | 面板填充、边框、圆角和阴影样式。 |
+| [`IconName`](IconName.md) | 内置矢量图标名称。 |
 
-## 函数
+## 文字
 
-| 函数 | 说明 |
+| 类型 | 说明 |
 |---|---|
-| [`clampF32`](functions.md#clampf32) | 将值限制在闭区间 [`low`, `high`]。 |
-| [`drawIcon`](functions.md#drawicon) | 在给定矩形内以圆头粗描边绘制一枚内置矢量图标。 |
-| [`imageFormatFromPath`](functions.md#imageformatfrompath) | 按扩展名推断图像文件格式：`.png` / `.PNG` 为 PNG，其余一律为 BMP。 |
-| [`sdlVersion`](functions.md#sdlversion) | 返回链接到的 SDL 版本号（SDL_GetVersion 的数值编码）。 |
-| [`sdlRevision`](functions.md#sdlrevision) | 返回 SDL 构建的修订串；SDL 未提供时为空串。 |
+| [`Fonts`](Fonts.md) | 把应用字体名映射到主字体和回退字体文件。 |
+| [`FontStyle`](FontStyle.md) | 粗体、斜体、下划线和删除线组合。 |
+| [`FontSizes`](FontSizes.md) | 常用字号常量。 |
+| [`TextMeasureSession`](TextMeasureSession.md) | 复用同一字符串和字体的适配、范围测量与命中测试。 |
+| [`TextFitResult`](TextFitResult.md) | 宽度限制内可容纳的 UTF-8 前缀。 |
+| [`TextHitResult`](TextHitResult.md) | 指针位置对应的文字插入边界和字形簇范围。 |
+
+## 图片与纹理
+
+| 类型 | 说明 |
+|---|---|
+| [`Surface`](Surface.md) | CPU 侧像素表面，可创建、加载、读写和保存。 |
+| [`Texture`](Texture.md) | 绑定某个渲染器的图像资源。 |
+| [`TextureRenderOptions`](TextureRenderOptions.md) | 纹理源区域、旋转中心和镜像选项。 |
+| [`TextureBlendMode`](TextureBlendMode.md) | 纹理与目标像素的混合方式。 |
+| [`TextureFlip`](TextureFlip.md) | 纹理水平或垂直镜像方式。 |
+| [`ImageFileFormat`](ImageFileFormat.md) | Surface 支持的 BMP 与 PNG 格式。 |
+
+## 异常与函数
+
+| 项目 | 说明 |
+|---|---|
+| [`SdlException`](SdlException.md) | SDL 调用、资源状态或封装层操作失败。 |
+| [`clampF32`](functions.md#clampf32) | 将浮点值限制在闭区间内。 |
+| [`drawIcon`](functions.md#drawicon) | 绘制内置矢量图标。 |
+| [`imageFormatFromPath`](functions.md#imageformatfrompath) | 根据文件扩展名选择图像格式。 |
+| [`sdlVersion`](functions.md#sdlversion) | 查询链接的 SDL 版本号。 |
+| [`sdlRevision`](functions.md#sdlrevision) | 查询 SDL 构建修订字符串。 |
 
 ## 子包
 
 | 包 | 说明 |
 |---|---|
-| [`sdl.dialogs`](dialogs/index.md) | 原生消息框与异步文件对话框。 |
-| [`sdl.displays`](displays/index.md) | 显示器信息查询与全屏显示模式枚举。 |
-| [`sdl.input`](input/index.md) | 剪贴板、鼠标状态、键盘修饰键与系统光标。 |
-| [`sdl.system`](system/index.md) | 应用元数据、路径与文件系统、SDL hint、时钟与日历时间、平台与电源信息。 |
+| [`sdl.input`](input/index.md) | 剪贴板、键鼠状态和系统光标。 |
+| [`sdl.dialogs`](dialogs/index.md) | 消息框和异步文件对话框。 |
+| [`sdl.displays`](displays/index.md) | 显示器信息和全屏模式。 |
+| [`sdl.system`](system/index.md) | 路径、文件、元数据、时间、电源和平台信息。 |

@@ -2,7 +2,7 @@
 
 # DateTimeLocalePreferences
 
-`sdl.system` 包中的 public struct
+位于 `sdl.system` 包的公开结构体。
 
 系统区域的日期时间显示偏好：日期字段顺序与报时制式。由 [`Time.localePreferences`](Time.md#localepreferences) 返回。
 

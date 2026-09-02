@@ -2,7 +2,7 @@
 
 # SdlHintSetting
 
-`sdl.system` 包中的 public struct
+位于 `sdl.system` 包的公开结构体。
 
 一条完整的 hint 设置：hint 名、值与优先级，供 [`SdlHints.apply`](SdlHints.md#apply) 批量应用。
 

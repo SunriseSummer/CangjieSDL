@@ -2,7 +2,7 @@
 
 # MessageBoxButtonOrder
 
-`sdl.dialogs` 包中的 public enum
+位于 `sdl.dialogs` 包的公开枚举。
 
 消息框按钮的排列方向。
 

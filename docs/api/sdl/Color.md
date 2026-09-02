@@ -2,7 +2,7 @@
 
 # Color
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 8 位通道的 RGBA 颜色。`rgb` / `rgba` 工厂接受整数，并把各通道限制在 0–255；[`lerp`](#lerp) 在两种颜色之间线性插值，适合生成动画过渡色。
 

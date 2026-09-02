@@ -2,7 +2,7 @@
 
 # DateTimeParts
 
-`sdl.system` 包中的 public struct
+位于 `sdl.system` 包的公开结构体。
 
 拆解后的日历时间：年月日、时分秒、纳秒、星期与 UTC 偏移。字段全部带默认值（1970-01-01 00:00:00），`DateTimeParts()` 构造后逐项赋值，或由 [`Time.toDateTime`](Time.md#todatetime) 填好返回。
 

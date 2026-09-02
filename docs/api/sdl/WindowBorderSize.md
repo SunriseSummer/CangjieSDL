@@ -2,7 +2,7 @@
 
 # WindowBorderSize
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 窗口装饰（标题栏与边框）在四个方向占用的像素数，由 [`SdlWindow.borderSize`](SdlWindow.md#bordersize) 返回。
 

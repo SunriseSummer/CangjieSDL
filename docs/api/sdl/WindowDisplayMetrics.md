@@ -2,7 +2,7 @@
 
 # WindowDisplayMetrics
 
-一个窗口当前的动态 DPI 尺度快照，明确分开应用缩放、原生窗口坐标和后备像素，避免把系统 DPI 与用户 zoom 重复相乘。
+窗口当前的动态 DPI 信息，分别记录应用缩放、窗口坐标和后备像素，避免重复计算系统 DPI 与应用缩放。
 
 ```cangjie
 public struct WindowDisplayMetrics {
@@ -15,10 +15,9 @@ public struct WindowDisplayMetrics {
 }
 ```
 
-- `contentScale`：一个应用逻辑单位对应多少原生窗口坐标单位，包含 `WindowSpec.scale` 请求的 zoom。
+- `contentScale`：一个应用逻辑单位对应多少窗口坐标单位，包含 `WindowSpec.scale` 指定的应用缩放。
 - `pixelDensity`：一个原生窗口坐标单位对应多少后备像素。
-- `renderScale`：逻辑单位到后备像素的总尺度，即 Renderer 实际使用的缩放。
-- `displayScale`：SDL 报告的综合显示缩放，尚未叠加应用 zoom。
+- `renderScale`：逻辑单位到后备像素的总尺度，即渲染器实际使用的缩放。
+- `displayScale`：SDL 报告的显示缩放，尚未叠加应用缩放。
 
-[`SdlWindow.refreshDisplayMetrics`](SdlWindow.md#refreshdisplaymetrics) 会返回此快照，并在尺度变化时更新 Renderer epoch、清理相关缓存及同步逻辑尺寸。窗口跨显示器时处理 `WindowDisplayScaleChanged` / `WindowPixelSizeChanged`；`SdlWindow` 和 [`SdlEventPump`](SdlEventPump.md) 的标准事件入口会自动执行刷新。
-
+[`SdlWindow.refreshDisplayMetrics`](SdlWindow.md#refreshdisplaymetrics) 会返回该结构体；尺度变化时还会同步逻辑尺寸、更新渲染缩放、清理相关缓存并使旧命令缓冲失效。`SdlWindow` 和 [`SdlEventPump`](SdlEventPump.md) 的标准事件入口会在处理 `WindowDisplayScaleChanged` 或 `WindowPixelSizeChanged` 时自动刷新。

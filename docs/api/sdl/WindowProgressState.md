@@ -2,7 +2,7 @@
 
 # WindowProgressState
 
-`sdl` 包中的 public enum
+位于 `sdl` 包的公开枚举。
 
 原生任务栏进度指示的状态（Windows 任务栏按钮的进度条），经 [`SdlWindow.setProgressState`](SdlWindow.md#setprogressstate) 设置。
 

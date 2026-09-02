@@ -2,7 +2,7 @@
 
 # Insets
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 逻辑像素下的四边间距——内边距、外边距、留白。[`horizontal`](#horizontal) 与 [`vertical`](#vertical) 分别求对边之和，即布局从可用尺寸中扣除的量。
 

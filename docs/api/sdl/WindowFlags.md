@@ -2,7 +2,7 @@
 
 # WindowFlags
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 窗口状态标志位快照：把 SDL 的 64 位标志掩码展开为逐项布尔字段，同时保留原始掩码。由 [`SdlWindow.windowFlags`](SdlWindow.md#windowflags) 返回。
 

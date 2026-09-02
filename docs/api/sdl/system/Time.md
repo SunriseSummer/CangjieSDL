@@ -2,7 +2,7 @@
 
 # Time
 
-`sdl.system` 包中的 public class
+位于 `sdl.system` 包的公开类。
 
 系统实时钟与日历换算：读取当前时间（1970-01-01 UTC 起算的纳秒），在纳秒时间戳与 [`DateTimeParts`](DateTimeParts.md) 之间互转，查询每月天数、一年中的第几天和星期，以及与 Windows FILETIME 互转。单调计时见 [`PerformanceClock`](PerformanceClock.md)。SDL 无法读取时钟、换算日历字段或返回有效日历结果时，方法把失败状态转换为 `SdlException`。
 

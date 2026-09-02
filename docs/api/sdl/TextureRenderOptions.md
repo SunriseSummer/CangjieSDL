@@ -2,7 +2,7 @@
 
 # TextureRenderOptions
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 [`Renderer.textureRotated`](Renderer.md#texturerotated) 的可选项集合：源区域裁剪、旋转中心与镜像方式。全部字段带默认值，只需设置关心的项。
 

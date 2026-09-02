@@ -2,7 +2,7 @@
 
 # PowerInfo
 
-`sdl.system` 包中的 public struct
+位于 `sdl.system` 包的公开结构体。
 
 电源信息快照：供电状态、剩余秒数与剩余百分比；系统无法给出的项为 `None`。由 [`powerInfo`](functions.md#powerinfo) 返回。
 

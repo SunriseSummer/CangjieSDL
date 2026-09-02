@@ -14,37 +14,9 @@
 
 ## 操作步骤
 
-点击“打开”时创建请求；每帧查询结果，Pending 保留请求，其他三种终态处理后清空。下面片段放在事件处理与更新层，窗口事件循环仍由基页提供。
+点击“打开”时，用 `FileDialogOptions` 配置 `FileDialogFilter("图片", "png;jpg")` 和多选，再调用 `FileDialogs.openFile` 保存返回的 `FileDialogRequest`。每帧查询 `result()`：`FileDialogPending` 保留请求；`FileDialogSelected` 把路径交给业务队列；`FileDialogCanceled` 安静结束；`FileDialogFailed` 显示错误。后三种结果处理完后都清空请求。
 
-```cangjie role=patch
-case UiEvent.KeyDown(Key.Letter(code), false) =>
-    if (code == UInt8(79)) {
-        let options = FileDialogOptions(
-            filters: [FileDialogFilter("图片", "png;jpg")],
-            allowMany: true
-        )
-        dialogRequest = Some(FileDialogs.openFile(options: options, window: Some(window)))
-    } else if (code == UInt8(67)) {
-        Clipboard.setText(documentText)
-    } else if (code == UInt8(86) && Clipboard.hasText()) {
-        documentText = Clipboard.getText()
-    }
-
-if (let Some(request) <- dialogRequest) {
-    match (request.result()) {
-        case FileDialogResult.FileDialogPending => ()
-        case FileDialogResult.FileDialogSelected(paths, _) => {
-            queueFiles(paths)
-            dialogRequest = None<FileDialogRequest>
-        }
-        case FileDialogResult.FileDialogCanceled => dialogRequest = None<FileDialogRequest>
-        case FileDialogResult.FileDialogFailed(message) => {
-            status = "选择失败：${message}"
-            dialogRequest = None<FileDialogRequest>
-        }
-    }
-}
-```
+复制和粘贴仍属于事件层的轻量操作：复制调用 `Clipboard.setText`；粘贴先查询 `hasText()`，再读取 `getText()` 并执行长度和格式检查。
 
 真正读取文件放到请求终态之后，并先检查路径、扩展名与业务上限。窗口关闭时若请求仍 Pending，停止继续使用窗口，但保留清晰日志；不要把 Pending 当作取消。
 
@@ -58,18 +30,7 @@ if (let Some(request) <- dialogRequest) {
 
 ## 可以继续修改
 
-加入双按钮“放弃修改”确认。返回值是按钮 ID，不是数组位置；Escape 和回车默认行为通过按钮属性明确设置。
-
-```cangjie role=variation
-var options = MessageBoxOptions("放弃修改", "未保存的内容将丢失。")
-options.kind = MessageBoxKind.Warning
-options.buttons = [
-    MessageBoxButton("放弃", id: 1),
-    MessageBoxButton("返回", id: 0, returnKeyDefault: true, escapeKeyDefault: true)
-]
-let chosen = showMessageBox(options, window: Some(window))
-if (chosen == 1) { discardChanges() }
-```
+加入双按钮“放弃修改”确认：把 `MessageBoxOptions.kind` 设为 `Warning`，为“放弃”使用稳定 ID 1，为“返回”使用 ID 0，并把后者同时设为回车和 Esc 默认按钮。`showMessageBox` 返回的是按钮 ID，不是数组位置；只有结果为 1 时才丢弃修改。
 
 ## 相关 API
 

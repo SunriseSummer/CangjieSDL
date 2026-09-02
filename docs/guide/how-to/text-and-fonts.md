@@ -14,43 +14,11 @@
 
 ## 操作步骤
 
-把下面片段放在场景绘制内部。`right` 是读数右边界，标题与读数使用不同层级；按钮标签用 `textCenter`，不再手算基线。这里先使用系统字体，因此 `font` 参数省略。
+在场景中分别创建标题样式和读数样式。标题使用 `FontSizes.TITLE`；读数用 `FontSizes.DISPLAY` 调用 `textWidth`，再用“右边界减宽度”得到起始位置，并把同一个样式传给 `text`。按钮标签直接使用 `textCenter`，不需要手算水平位置或基线。
 
-```cangjie role=patch
-let titleStyle = FontStyle(bold: true)
-renderer.text("本月用量", 64.0, 70.0, Color.rgb(191, 219, 254),
-    pointSize: FontSizes.TITLE, style: titleStyle)
+长读数可先测 `DISPLAY` 宽度，超出可用范围后改用 `TITLE` 或自定义较小字号；不要只缩放绘制而继续使用旧度量。需要命名字体时，通过 `Fonts.registerFamily` 注册主字体和按顺序尝试的回退字体，再在度量和绘制中都传 `font: Some("brand")`。注册应在首次渲染前完成，不要放进帧循环。
 
-let value = "12,480"
-let valueStyle = FontStyle(bold: true)
-let valueWidth = renderer.textWidth(value, pointSize: FontSizes.DISPLAY, style: valueStyle)
-let right: Float32 = width - 64.0
-renderer.text(value, right - valueWidth, 118.0, Color.rgb(255, 255, 255),
-    pointSize: FontSizes.DISPLAY, style: valueStyle)
-
-let button = Rect(width - 184.0, height - 98.0, 120.0, 44.0)
-renderer.fillRoundedRect(button, 10.0, Color.rgb(56, 189, 248))
-renderer.textCenter("导出", button, Color.rgb(8, 47, 73),
-    pointSize: FontSizes.CONTROL, style: FontStyle(bold: true))
-```
-
-长读数可先测 DISPLAY 宽度，超出可用范围后改用 TITLE 或自定义较小字号；不要只缩放绘制而继续使用旧度量。若需要字体名，先通过 `Fonts.registerFamily` 注册主字体与有序 fallback，再在度量和绘制中都传 `font: Some("brand")`。
-
-```cangjie role=patch
-Fonts.registerFamily("brand", "assets/fonts/BrandLatin.ttf",
-    fallbackPaths: ["assets/fonts/NotoSansCJKsc-Regular.otf", "assets/fonts/NotoColorEmoji.ttf"])
-```
-
-需要为长行找换行位置或把点击映射到光标时，在一次布局/交互中复用测量会话；会话固定字符串、字体、字号和样式，使用完后关闭。`hitTest` 返回 shaping cluster 的安全边界，比逐个测量字符串前缀更快，也不会把连字或 RTL cluster 拆开。
-
-```cangjie role=patch
-try (measure = renderer.textMeasureSession(line, pointSize: FontSizes.BODY,
-    font: Some("brand"))) {
-    let firstLine = measure.fit(0, availableWidth)
-    let caret = measure.hitTest(pointerX)
-    println("fit bytes=${firstLine.byteLength}, caret=${caret.byteOffset}")
-}
-```
+需要为长行找换行位置或把点击映射到光标时，用 `textMeasureSession` 固定字符串、字体、字号和样式，并在同一个资源块中调用 `fit` 与 `hitTest`。结果使用 UTF-8 字节偏移和字形簇安全边界，比逐个测量字符串前缀更快，也不会从中间拆开连字或从右向左文字。
 
 ## 确认结果
 
@@ -62,13 +30,7 @@ try (measure = renderer.textMeasureSession(line, pointSize: FontSizes.BODY,
 
 ## 可以继续修改
 
-加入带删除线的旋转状态标签，验证组合样式与旋转纹理缓存。下面变化使用不同绘制入口，肉眼应看到围绕指定中心旋转的文字。
-
-```cangjie role=variation
-let warningStyle = FontStyle(bold: true, italic: true, strikethrough: true)
-renderer.textRotated("已过期", width - 120.0, 88.0, -12.0,
-    Color.rgb(253, 186, 116), pointSize: FontSizes.TITLE, style: warningStyle)
-```
+创建同时启用粗体、斜体和删除线的 `FontStyle`，再通过 `textRotated` 绘制“已过期”状态标签。重复显示同一内容时，旋转文字纹理应命中缓存；改变文字、字号、样式、字体或缩放后才需要重新生成。
 
 ## 相关 API
 
@@ -76,7 +38,7 @@ renderer.textRotated("已过期", width - 120.0, 88.0, -12.0,
 - [`FontStyle`](../../api/sdl/FontStyle.md)：文字样式组合。
 - [`FontSizes`](../../api/sdl/FontSizes.md)：常用字号层级。
 - [`Fonts`](../../api/sdl/Fonts.md)：命名字体注册。
-- [`TextMeasureSession`](../../api/sdl/TextMeasureSession.md)：长串适配、范围测量与 cluster 命中。
+- [`TextMeasureSession`](../../api/sdl/TextMeasureSession.md)：长串适配、范围测量与字形簇命中。
 
 ## 下一步
 

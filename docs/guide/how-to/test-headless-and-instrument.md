@@ -14,21 +14,38 @@
 
 ## 操作步骤
 
-在平台教程完整程序中加入一个无窗口自检。headless 下所有绘制调用应安全无操作，裁剪栈仍按逻辑维护，文字重复度量可通过计数器观察。下面片段执行后以打印和退出码确认。
+下面的程序不创建窗口。无窗口渲染调用是安全的空操作，裁剪栈仍按逻辑维护，文字重复度量可通过计数器观察。
 
-```cangjie role=patch
-let renderer = Renderer.headless()
-renderer.beginScene(640.0, 360.0, Color.rgb(0, 0, 0))
-renderer.pushClip(Rect(20.0, 20.0, 200.0, 80.0))
-renderer.text("缓存测试", 28.0, 36.0, Color.rgb(255, 255, 255))
-match (renderer.currentClip()) {
-    case Some(rect) => println("clip=${rect.w}x${rect.h}")
-    case None => throw SdlException("裁剪栈为空")
+```cangjie verify role=complete profile=headless
+package docexample
+
+import sdl.{Color, FontSizes, FontStyle, Rect, Renderer}
+
+main(): Unit {
+    let renderer = Renderer.headless()
+    renderer.beginScene(640.0, 360.0, Color.rgb(0, 0, 0))
+    renderer.pushClip(Rect(20.0, 20.0, 200.0, 80.0))
+    renderer.text("缓存测试", 28.0, 36.0, Color.rgb(255, 255, 255))
+    match (renderer.currentClip()) {
+        case Some(rect) => println("clip=${rect.w}x${rect.h}")
+        case None => throw IllegalStateException("clip stack is empty")
+    }
+    renderer.popClip()
+    renderer.endScene()
+    renderer.present()
+
+    renderer.resetTextMeasureCount()
+    let plain1 = renderer.textWidth("状态", pointSize: FontSizes.BODY)
+    let plain2 = renderer.textWidth("状态", pointSize: FontSizes.BODY)
+    let bold = renderer.textWidth(
+        "状态",
+        pointSize: FontSizes.BODY,
+        style: FontStyle(bold: true)
+    )
+    println("vsync=${renderer.vsync()}")
+    println("measure=${renderer.textMeasureCount()}, compute=${renderer.textComputeCount()}")
+    println("widths=${plain1},${plain2},${bold}")
 }
-renderer.popClip()
-renderer.endScene()
-renderer.present()
-println("vsync=${renderer.vsync()}")
 ```
 
 真实测试还应调用纯布局函数并断言矩形不越界。若无头查询返回 viewport 零矩形、colorScale 1.0、vsync 0，这是契约的中性值，不代表真实设备。
@@ -43,16 +60,7 @@ println("vsync=${renderer.vsync()}")
 
 ## 可以继续修改
 
-重置文字计数器，重复测量同一字符串，再测量不同样式；确认 compute 对相同键只增加一次，对粗体键再次增加。
-
-```cangjie role=variation
-renderer.resetTextMeasureCount()
-let plain1 = renderer.textWidth("状态", pointSize: FontSizes.BODY)
-let plain2 = renderer.textWidth("状态", pointSize: FontSizes.BODY)
-let bold = renderer.textWidth("状态", pointSize: FontSizes.BODY, style: FontStyle(bold: true))
-println("measure=${renderer.textMeasureCount()}, compute=${renderer.textComputeCount()}")
-println("widths=${plain1},${plain2},${bold}")
-```
+把普通文字换成更长的中英文混合字符串，再重复测量。`measure` 记录调用次数，`compute` 只在新的缓存键出现时增加；改变粗体、字号或字体会形成新键。
 
 ## 相关 API
 

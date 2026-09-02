@@ -2,9 +2,9 @@
 
 # Renderer
 
-`sdl` 包中的 public class
+位于 `sdl` 包的公开类。
 
-窗口的二维绘制入口：绘制几何、文本和纹理，并管理视口与裁剪。所有坐标为逻辑像素。实例随 [`SdlWindow`](SdlWindow.md) 一同创建（`window.renderer`），或用 [`headless`](#headless) 得到无设备实例。
+二维绘制入口，负责场景提交、几何、文字、纹理、视口和裁剪。所有坐标使用逻辑像素。真实实例由 [`SdlWindow`](SdlWindow.md) 创建并通过 `window.renderer` 提供；测试可以使用 [`headless`](#headless) 创建无设备实例。
 
 ## 声明
 
@@ -14,17 +14,19 @@ public class Renderer
 
 ## 说明
 
-普通整帧优先用 [`renderFrame`](#renderframe) 包住绘制；它保证异常时仍 resolve 并恢复 renderer 状态，且不呈现残缺帧。需要在 resolve 与 present 之间插入截图/剖析时使用 [`beginRenderPass`](#beginrenderpass) 返回的 [`RenderPass`](RenderPass.md)。底层 [`beginScene`](#beginscene) / [`endScene`](#endscene) / [`present`](#present) 仍供自定义事务使用。超采样开启时场景先绘制到离屏目标，resolve 时线性缩小回窗口；文本按实际像素尺寸栅格化并 1:1 绘制。Auto 除物理密度外还受 32 Mi 像素目标预算与 SDL 最大纹理边长约束，避免超大低 DPI 窗口无界申请显存；显式正数不受框架像素预算限制。
+普通整帧绘制优先使用 [`renderFrame`](#renderframe)。它会自动开始场景、执行绘制、把离屏结果解析回窗口并提交画面；绘制抛出异常时仍恢复渲染状态，但不会提交残缺帧。需要在场景结束后、提交前截图或记录性能时，使用 [`beginRenderPass`](#beginrenderpass) 返回的 [`RenderPass`](RenderPass.md)。[`beginScene`](#beginscene)、[`endScene`](#endscene) 和 [`present`](#present) 只用于需要完全控制事务边界的场景。
 
-无头渲染器（[`headless`](#headless)）没有 SDL 设备：全部绘制调用为空操作，文本测量回退到比例估算（粗体略加宽，结果确定可断言），这让布局与事件代码可以离屏测试。逻辑裁剪栈无头时依旧生效并可查询。
+启用超采样时，几何先绘制到更大的离屏目标，再线性缩小到窗口。自动模式根据物理像素密度选择 1 倍或 2 倍，并受 32 Mi 个目标像素和硬件最大纹理边长限制；显式正数不受框架像素预算限制，但仍可能因尺寸、硬件或分配失败而退回直接绘制。
 
-`Renderer` 由窗口持有，不单独关闭。关闭 [`SdlWindow`](SdlWindow.md#close) 时，会先释放渲染器内部的超采样目标、文本纹理缓存和几何缓冲，再销毁 SDL 渲染器；这一步可重复执行而不会重复释放资源。
+无头渲染器没有 SDL 设备：绘制调用是空操作，文字尺寸使用确定性估算，逻辑裁剪栈仍可查询。它适合测试布局和控制流，不能证明真实字体、纹理、DPI 或 GPU 输出正确。
 
-`Renderer` 是线程封闭的设备对象：除 `static headless()` 外，所有 public 绘制、录制、场景、状态设置、查询和诊断入口都只能在创建它的仓颉线程调用；[`RenderPass`](RenderPass.md) 与由它录制的命令资源遵循同一所有权。错误线程会在读取或修改任何 renderer 状态前抛出 `IllegalStateException`。需要后台计算时只在线程间传递应用数据或不可变 action，再回到 owner 线程调用渲染 API；无头实例也不会放宽此契约。
+`Renderer` 由窗口拥有，不单独关闭。关闭 [`SdlWindow`](SdlWindow.md#close) 时，会先释放超采样目标、文字纹理缓存和几何缓冲，再销毁 SDL 渲染器。
+
+除静态的 `headless()` 外，所有公开方法都只能在渲染器的创建线程调用；[`RenderPass`](RenderPass.md)、纹理和录制命令遵循同一约束。错误线程会在读取或修改状态前抛出 `IllegalStateException`。后台线程只能准备普通应用数据，再把结果交回渲染线程。
 
 SDL 的失败状态会影响本次设置、查询或纹理绘制时，`Renderer` 将其转换为 `SdlException`；明确说明为空操作、返回估算值或可选缓存 `None` 的路径不调用或不传播 SDL 失败。
 
-文本走独立的绘制通路：字形按有效像素尺寸（`pointSize` × 当前纵向缩放）由 FreeType 栅格化，在对齐到物理像素的位置上 1:1 绘制——先按逻辑尺寸栅格化再被渲染缩放拉伸会让每个字形被重采样两次，明显发虚。度量缓存也保存这个实际栅格字号下的原生结果，再按当前横纵缩放映回逻辑坐标；因此居中标签在高 DPI、应用缩放或超采样场景中仍能跨帧命中，而非每次绘制重新调用字体后端。旋转文本（[`textRotated`](#textrotated)）整串栅格化进纹理并跨帧缓存（键含文本/字号/样式/字体/缩放；颜色以颜色调制按次生效）。
+文字按 `pointSize × 纵向缩放` 的实际像素尺寸生成字形，并对齐物理像素绘制，避免先生成小字再放大造成模糊。度量结果也按实际字号缓存，再映射回逻辑坐标，因此高 DPI、应用缩放和超采样下仍能复用。旋转文字会把整串内容缓存为纹理；缓存键包含文字、字号、样式、字体和缩放，颜色在每次绘制时单独应用。
 
 ## 示例
 
@@ -37,13 +39,12 @@ main(): Unit {
     // 无头渲染器：绘制为空操作、测量为估算，适合离屏演示与测试。
     // 真实窗口场景改用 SdlWindow(WindowSpec(...)).renderer，调用方式完全相同。
     let r = Renderer.headless()
-    var width: Float32 = 0.0
     r.renderFrame(320.0, 240.0, Color.rgb(30, 30, 46)) {
         r.fillRoundedRect(Rect(24.0, 24.0, 120.0, 60.0), 8.0, Color.rgb(64, 128, 255))
         r.strokeLine(24.0, 120.0, 296.0, 120.0, Pen(width: 2.0, color: Color.rgb(220, 220, 230)))
         r.text("你好，SDL", 24.0, 140.0, Color.rgb(220, 220, 230))
-        width = r.textWidth("你好，SDL")
     }
+    let width = r.textWidth("你好，SDL")
     println("驱动 ${r.driverName()}，文本宽度为正：${width > 0.0}")
     // 输出: 驱动 headless，文本宽度为正：true
 }
@@ -60,12 +61,12 @@ main(): Unit {
 | [`supersampleFactor()`](#supersamplefactor) | 当前选择的每轴超采样倍数（1 = 关闭）；分配状态见采样诊断。 |
 | [`renderSamplingStats()`](#rendersamplingstats) | 查询当前采样决策、计划目标尺寸、RGBA8 字节成本、硬件边长与降级原因。 |
 | [`beginScene(logicalWidth: Float32, logicalHeight: Float32, clearColor: Color)`](#beginscene) | 开始一帧：建立绘制目标并清屏。 |
-| [`beginSceneDamage(logicalWidth: Float32, logicalHeight: Float32, clearColor: Color, damage: Rect)`](#beginscenedamage) | 尝试保留 damage 外的上一帧像素并只清理局部区域；不能安全保留时回退全帧并返回 `false`。 |
+| [`beginSceneDamage(logicalWidth: Float32, logicalHeight: Float32, clearColor: Color, damage: Rect)`](#beginscenedamage) | 尝试只重绘指定区域；不能保留区域外像素时退回整帧并返回 `false`。 |
 | [`beginRenderPass(...)`](#beginrenderpass) | 返回异常安全、幂等关闭的 RenderPass。 |
-| [`beginRenderPassDamage(...)`](#beginrenderpass) | damage-aware RenderPass；`damagePreserved` 报告后端实际选择。 |
-| [`renderFrame(...)`](#renderframe) | 完整 begin/draw/resolve/present 事务。 |
-| [`endScene()`](#endscene) | 结束一帧：解析超采样目标，并把设备/逻辑缩放恢复到帧间测量状态。 |
-| [`recordCommands(body: () -> Unit)`](#recordcommands) | 把绘制叶操作录制成不可变透明命令缓冲，不立即触碰 GPU。 |
+| [`beginRenderPassDamage(...)`](#beginrenderpassdamage) | 开始局部重绘场景；`damagePreserved` 报告是否保留了区域外像素。 |
+| [`renderFrame(...)`](#renderframe) | 完成开始、绘制、解析和提交的整帧事务。 |
+| [`endScene()`](#endscene) | 结束场景，解析超采样目标并恢复帧间缩放。 |
+| [`recordCommands(body: () -> Unit)`](#recordcommands) | 把绘制操作录制为不可变命令缓冲，不立即提交到 GPU。 |
 | [`snapshotTexture(rect: Rect)`](#snapshottexture) | 从当前绘制目标读回逻辑矩形并创建 GPU 纹理；不支持/失败时为 `None`。 |
 | [`setColor(color: Color)`](#setcolor) | 设置底层 SDL 渲染器的当前绘制颜色。 |
 | [`clear(color: Color)`](#clear) | 以纯色清空当前渲染目标。 |
@@ -147,7 +148,7 @@ public func driverName(): String
 
 ### supersampleFactor
 
-当前选择的每轴超采样倍数（1 = 关闭）。显式正数请求在资源可行时固定；`WindowSpec.supersample = 0` 的 Auto 请求会按每逻辑单位的物理后备像素选择 1x 或 2x，再检查 32 Mi 像素预算。窗口跨显示器、DPI 或尺寸变化越过阈值时会重新选择。策略切换会释放旧离屏目标并使已录制命令失效，下一帧按新采样格安全重建。硬件边长、整数上限或原生分配仍可能使目标不可用，精确原因见 [`renderSamplingStats`](#rendersamplingstats)。
+当前选择的每轴超采样倍数，1 表示直接绘制。显式正数在资源允许时保持不变；`WindowSpec.supersample = 0` 会根据物理像素密度选择 1 倍或 2 倍，再检查 32 Mi 个目标像素的预算。窗口尺寸、DPI 或所在显示器变化时可能重新选择。倍率变化会释放旧离屏目标并使已有命令缓冲失效，应用应在下一帧重新录制。具体原因见 [`renderSamplingStats`](#rendersamplingstats)。
 
 ```cangjie
 public func supersampleFactor(): Int32
@@ -157,7 +158,7 @@ public func supersampleFactor(): Int32
 
 ### renderSamplingStats
 
-返回 [`RenderSamplingStats`](RenderSamplingStats.md)：请求/选择倍率、计划目标宽高、RGBA8 估算字节数、SDL 报告的最大纹理边长和 [`RenderSamplingStatus`](RenderSamplingStatus.md)。查询只读取 Renderer 已提交的决策，不访问 GPU、分配内存或改变命令 epoch，适合性能 overlay 与基准记录。和其他 Renderer 状态一样，它受 owner 线程约束。
+返回 [`RenderSamplingStats`](RenderSamplingStats.md)，包括请求值、实际选择、目标尺寸、RGBA8 内存估算、最大纹理边长和 [`RenderSamplingStatus`](RenderSamplingStatus.md)。查询不会访问 GPU、分配内存或使命令缓冲失效，适合调试界面和性能记录。它仍受渲染线程约束。
 
 ```cangjie
 public func renderSamplingStats(): RenderSamplingStats
@@ -167,7 +168,28 @@ public func renderSamplingStats(): RenderSamplingStats
 
 ### beginRenderPass
 
-`beginRenderPass` 与 `beginRenderPassDamage` 分别开始全帧或局部帧，并返回 [`RenderPass`](RenderPass.md)。用 `try (pass = ...)` 或 `finally { pass.close() }` 可确保异常时仍恢复 target/scale/clip。damage 版本通过 `pass.damagePreserved` 报告是否真正保留区域外像素。
+开始完整场景并返回 [`RenderPass`](RenderPass.md)。使用 `try (pass = ...)` 或在 `finally` 中关闭，可确保异常时仍恢复渲染目标、缩放和裁剪。
+
+```cangjie
+public func beginRenderPass(
+    logicalWidth: Float32,
+    logicalHeight: Float32,
+    clearColor: Color
+): RenderPass
+```
+
+### beginRenderPassDamage
+
+开始局部重绘场景。返回对象的 `damagePreserved` 表示是否成功保留了损坏区域以外的上一帧像素；无法安全保留时已经退回完整场景。
+
+```cangjie
+public func beginRenderPassDamage(
+    logicalWidth: Float32,
+    logicalHeight: Float32,
+    clearColor: Color,
+    damage: Rect
+): RenderPass
+```
 
 ### renderFrame
 
@@ -203,10 +225,7 @@ public func endScene(): Unit
 
 ### beginSceneDamage
 
-尝试在兼容的持久超采样目标上开始局部更新：保留 `damage` 外的上一帧像素，只以 `clearColor` 清理并
-裁剪 damage 区域。成功返回 `true`；区域为空/完全越界、目标尚未建立、尺寸改变、超采样关闭或后端不能安全保留时，方法已经
-调用 [`beginScene`](#beginscene) 完成可靠的全帧回退，并返回 `false`。无头渲染器接受逻辑 damage，便于
-确定性测试。
+尝试只更新 `damage` 指定的逻辑区域，并保留区域外的上一帧像素。区域为空、完全越界、目标尚未建立、尺寸改变、超采样关闭或后端无法安全保留时，方法会调用 [`beginScene`](#beginscene) 退回整帧绘制并返回 `false`。无头渲染器也会检查区域，便于确定性测试。
 
 ```cangjie
 public func beginSceneDamage(
@@ -217,17 +236,15 @@ public func beginSceneDamage(
 ): Bool
 ```
 
-调用方仍须按正常顺序调用 [`endScene`](#endscene) 和 [`present`](#present)，并重放所有与 damage 相交的
-display list，保持正确的 z 序和混合结果。该 API 不从窗口 backbuffer 猜测可保留内容；它只在本 Renderer
-拥有且尺寸匹配的持久离屏目标上局部更新。
+调用方仍须按正常顺序调用 [`endScene`](#endscene) 和 [`present`](#present)，并重放所有与 `damage` 相交的命令缓冲，保持原有绘制顺序和混合结果。局部更新只使用当前渲染器拥有且尺寸匹配的离屏目标，不尝试从窗口后备缓冲区恢复内容。
 
-**返回值** `Bool` — `true` 表示本帧实际采用局部 damage；`false` 表示已安全回退全帧。
+**返回值** `Bool` — `true` 表示本帧采用局部更新；`false` 表示已经退回整帧绘制。
 
 ### recordCommands
 
-执行 `body` 并把期间的绘制、clip、文本与纹理叶操作保存为不可变
-[`RenderCommandBuffer`](RenderCommandBuffer.md)，录制时不向 GPU 提交绘制。嵌套录制受支持；帧控制、
-viewport、缩放、截图与资源释放等设备状态操作会被拒绝。异常或不平衡的 clip 会取消本次录制并恢复调用方
+执行 `body`，把其中的绘制、裁剪、文字和纹理操作保存为不可变
+[`RenderCommandBuffer`](RenderCommandBuffer.md)，录制时不会向 GPU 提交。可以嵌套录制；帧控制、
+视口、缩放、截图与资源释放等设备状态操作会被拒绝。异常或不平衡的裁剪操作会取消本次录制并恢复调用方
 状态。
 
 ```cangjie
@@ -290,9 +307,7 @@ public func present(): Unit
 public func snapshotTexture(rect: Rect): ?Texture
 ```
 
-从当前 render target 的逻辑矩形读回像素并上传为 GPU 纹理。无头、空/越界矩形、后端读回、纹理
-元数据查询或不透明混合模式设置失败时返回 `None`，且释放所有中间 Surface/Texture，让调用方回退到普通绘制。该操作包含 GPU→CPU→GPU 同步，只适合显式、长期命中的
-不透明保留绘制缓存，不应作为逐帧截图路径。返回纹理由调用方负责 `close()`。
+从当前渲染目标的逻辑矩形读回像素，再上传为 GPU 纹理。无头模式、空矩形、越界或任一后端操作失败时返回 `None`，并释放中间资源。该操作包含 GPU 到 CPU 再回到 GPU 的同步，只适合长期复用的不透明绘制缓存，不应每帧调用。返回的纹理由调用方关闭。
 
 ### setScale
 
@@ -777,7 +792,7 @@ public func textHeight(pointSize!: Float32 = FontSizes.BODY, style!: FontStyle =
 
 ### textMeasureSession
 
-为同一字符串的多次范围测量创建 [`TextMeasureSession`](TextMeasureSession.md)。与反复构造子串再调用 `textWidth` 相比，只复制一次 UTF-8，并通过 SDL_ttf 的前缀测量直接取得可容纳字节数；真实后端使用有限 shaping window，避免长余串逐行重复处理。调用方应以 try-with-resource 或 `close()` 及时释放，且会话不得活过 Renderer。
+为同一字符串的多次范围测量创建 [`TextMeasureSession`](TextMeasureSession.md)。与反复构造子串再调用 `textWidth` 相比，它只复制一次 UTF-8 数据，并按需扩展测量范围，避免每一行都处理完整剩余文字。应使用 `try (...)` 或 `close()` 及时释放，会话不能超过所属渲染器的生命周期。
 
 ```cangjie
 public func textMeasureSession(text: String, pointSize!: Float32 = FontSizes.BODY,

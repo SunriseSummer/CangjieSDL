@@ -2,7 +2,7 @@
 
 # UserFolder
 
-`sdl.system` 包中的 public enum
+位于 `sdl.system` 包的公开枚举。
 
 操作系统的标准用户目录，交给 [`ApplicationPaths.userFolder`](ApplicationPaths.md#userfolder) 解析为具体路径。
 

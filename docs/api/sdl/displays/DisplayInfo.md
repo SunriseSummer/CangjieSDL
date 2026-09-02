@@ -2,7 +2,7 @@
 
 # DisplayInfo
 
-`sdl.displays` 包中的 public struct
+位于 `sdl.displays` 包的公开结构体。
 
 一台显示器的聚合信息：编号、名称、几何、朝向与显示模式。由 [`primaryDisplayInfo`](functions.md#primarydisplayinfo) / [`displayInfo`](functions.md#displayinfo) / [`allDisplayInfos`](functions.md#alldisplayinfos) 返回。
 

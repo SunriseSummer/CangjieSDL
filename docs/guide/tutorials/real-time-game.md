@@ -114,17 +114,7 @@ main(): Unit {
 
 ## 接着试一试
 
-给方块增加短冲刺：按 Space 时把 `dashRemaining` 设为 0.12 秒，更新时使用更高速度并逐帧扣减。下面变化同时涉及事件和模拟，但不进入渲染层；渲染只根据剩余时间改变颜色。
-
-```cangjie role=variation
-case UiEvent.KeyDown(Key.Space, false) => dashRemaining = 0.12
-
-let currentSpeed = if (dashRemaining > 0.0) { 520.0 } else { 240.0 }
-dashRemaining = clampF32(dashRemaining - dt, 0.0, 0.12)
-let playerColor = if (dashRemaining > 0.0) { Color.rgb(250, 204, 21) } else { Color.rgb(56, 189, 248) }
-```
-
-近迁移到 `thunder` 时，可把它实现为玩家技能：配置值放 `config.cj`，状态放 `model.cj`，输入边沿放 `loop.cj`，位移和冷却放 `systems.cj`，颜色或残影放 `render.cj`。确认新增逻辑没有反向依赖渲染。
+给方块增加短冲刺：Space 首次按下时把 `dashRemaining` 设为 0.12 秒；更新阶段在剩余时间大于零时把速度从 240 提高到 520，并用 `dt` 递减；渲染阶段只根据剩余时间改变颜色。把练习迁移到 `thunder` 时，可把配置放 `config.cj`、状态放 `model.cj`、输入处理放 `loop.cj`、位移和冷却放 `systems.cj`、颜色或残影放 `render.cj`。确认业务更新没有反向依赖渲染。
 
 ## 如果没有成功
 

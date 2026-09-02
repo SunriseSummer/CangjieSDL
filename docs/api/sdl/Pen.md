@@ -2,7 +2,7 @@
 
 # Pen
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 一次描边的描述：线条/轮廓的宽度与颜色。把两者组合成一支笔，使 [`Renderer.strokeLine`](Renderer.md#strokeline) / [`strokeRect`](Renderer.md#strokerect) / [`strokeCircle`](Renderer.md#strokecircle) 等描边方法的参数更简洁。
 

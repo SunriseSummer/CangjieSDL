@@ -1,10 +1,8 @@
-[sdl](../index.md) › [sdl](index.md) › RenderCommandSlot
+[API 参考](../index.md) › [sdl](index.md) › RenderCommandSlot
 
 # RenderCommandSlot
 
-一个由单一 [`Renderer`](Renderer.md) 拥有的稳定层次化 display-list 引用。父
-[`RenderCommandBuffer`](RenderCommandBuffer.md) 在录制期间调用 `slot.replay(renderer)` 时只保存一个槽引用；
-之后 `replace` 可以原子替换不可变子缓冲，而不把子命令、纹理句柄和编译批次复制到所有祖先。
+`RenderCommandSlot` 是父命令缓冲中的稳定子节点引用。父缓冲录制一次后，可以通过 `replace` 换入新的子缓冲，而不必把整棵命令树重新复制到所有祖先。它适合上层 GUI 框架的保留式场景树和局部更新。
 
 ```cangjie
 public class RenderCommandSlot {
@@ -22,41 +20,46 @@ public class RenderCommandSlot {
 }
 ```
 
-第一次 `replace` 把槽永久绑定到该缓冲的 Renderer；以后换入其他 Renderer 的缓冲抛出
-`IllegalArgumentException`。直接或传递形成引用环同样被拒绝。绑定后全部公开操作——替换、清空、配置、
-验证、重放和诊断读取——都必须发生在 Renderer 所属线程，错误线程抛出 `IllegalStateException`。未绑定空槽
-还没有线程身份：可以预配一次稳定边界或查询其为空；第一次 `replace` 才原子绑定 Renderer，此后不再转移。
+## 所有权与有效性
 
-`setReplayBounds` 为持久空间索引配置保守边界；实际子缓冲绘制必须完全包含在该边界中。边界是 slot 身份的一部分，
-第一次配置后只能重复传入相同值，改变它会抛出 `IllegalStateException`。几何变化应清空旧 slot 并创建新 slot，
-使引用旧身份的祖先永久保持不可重放，不能带着过期 BVH 复活。连续且全部具有稳定边界的 slot run 会在父缓冲
-录制完成时建立保持声明/z 序的持久 BVH；任一槽没有边界时自动使用安全的线性查询。
+第一次 `replace` 会把槽绑定到子缓冲的 `Renderer`。之后不能换入其他渲染器创建的缓冲，也不能形成直接或间接引用环。绑定后，替换、清空、验证、重放和查询都只能在渲染器的创建线程执行。
 
-`clear` 后所有引用该槽的祖先都会在提交任何绘制前变为不可重放。Renderer/resource epoch 不匹配、纹理已关闭
-或任一后代槽无效也会沿层次传播为 `false`；不会出现“父列表已画一半才发现子列表失效”。根缓冲只保存/恢复
-一次 clip 栈，已验证子缓冲以内联方式保持原 z 序和配对 clip，因此层次数量不会引入重复 clip 快照。
-`replayIntersecting` 只预验证并重放与 damage 相交的前沿；区外无效槽不会阻塞本次局部重放，相交集合仍在提交
-任何绘制前完整验证。
+`clear` 会移除当前子缓冲。所有引用这个槽的父缓冲随后都不可完整重放，直到换入新的有效缓冲。
 
-```cangjie
-let slot = RenderCommandSlot()
-slot.setReplayBounds(Rect(0.0, 0.0, 40.0, 20.0))
-slot.replace(renderer.recordCommands {
-    renderer.fill(Rect(0.0, 0.0, 40.0, 20.0), Color.rgb(30, 70, 110))
-})
+## 稳定边界与局部重放
 
-let parent = renderer.recordCommands {
-    if (!slot.replay(renderer)) {
-        throw IllegalStateException("child scene is not ready")
+`setReplayBounds` 为槽设置一个保守的固定边界，实际绘制必须完全落在其中。边界首次设置后只能重复写入相同值；几何范围发生变化时应创建新槽。这个限制可防止父缓冲继续使用已经过时的空间索引。
+
+连续且都具有稳定边界的槽会在父缓冲录制结束时建立空间索引。局部重放通常只访问与损坏区域相交的节点；缺少稳定边界时会安全退回线性检查。空间索引只优化查找，不改变原有绘制顺序。
+
+## 示例
+
+```cangjie verify role=complete
+package docexample
+
+import sdl.{Color, Rect, RenderCommandSlot, Renderer}
+
+main(): Unit {
+    let renderer = Renderer.headless()
+    let slot = RenderCommandSlot()
+    slot.setReplayBounds(Rect(0.0, 0.0, 40.0, 20.0))
+    slot.replace(renderer.recordCommands {
+        renderer.fill(Rect(0.0, 0.0, 40.0, 20.0), Color.rgb(30, 70, 110))
+    })
+
+    let parent = renderer.recordCommands {
+        if (!slot.replay(renderer)) {
+            throw IllegalStateException("child commands are unavailable")
+        }
     }
-}
 
-// 父缓冲身份保持不变；下一次重放会看到新子内容。
-slot.replace(renderer.recordCommands {
-    renderer.fill(Rect(0.0, 0.0, 40.0, 20.0), Color.rgb(90, 130, 170))
-})
-let _ = parent.replay(renderer)
+    slot.replace(renderer.recordCommands {
+        renderer.fill(Rect(0.0, 0.0, 40.0, 20.0), Color.rgb(90, 130, 170))
+    })
+    let _ = parent.replay(renderer)
+}
 ```
 
-普通单层缓存继续直接使用 `RenderCommandBuffer`。`RenderCommandSlot` 面向 retained scene graph、编辑器画布和
-其他“子树更新频繁、祖先结构稳定”的内核；每个很小的绘制节点都建立槽会增加一次间接调用，应由实测决定边界。
+`contentRevision()` 在内容替换、清空或首次设置边界时递增，可用于增量更新诊断。`hasCommands()` 只表示当前是否安装了子缓冲；是否可以安全播放应查询 `isReplayable`。
+
+普通的单层缓存直接使用 [`RenderCommandBuffer`](RenderCommandBuffer.md) 即可。只有在子树频繁变化而父结构长期稳定时，才需要引入槽和空间索引。

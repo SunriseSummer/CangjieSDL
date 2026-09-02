@@ -2,7 +2,7 @@
 
 # FileSystemEntryType
 
-`sdl.system` 包中的 public enum
+位于 `sdl.system` 包的公开枚举。
 
 文件系统条目的种类，出现在 [`PathInfo.entryType`](PathInfo.md#entrytype) 中。SDL 报告未知种类时映射为 `Missing`。
 

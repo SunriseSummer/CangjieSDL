@@ -12,25 +12,9 @@
 
 ### 症状一：窗口存在但全黑、闪烁或只有部分帧
 
-先只保留一种明确背景和一个白色矩形，检查每帧只调用一次 `renderFrame`。打印帧计数和 Renderer 驱动名，确认循环仍在运行。下面探针不依赖字体或纹理，若它也不可见，问题在场景顺序、窗口尺寸或显示环境。确认标准是蓝底白框持续稳定可见。
+先只保留一种明确背景和一个白色矩形，检查每帧只调用一次 `renderFrame`。场景宽高读取当前 `window.width` 与 `window.height`，绘制体只调用一次 `fill`。打印帧计数和 `driverName()`，确认循环仍在运行。若这个最小场景也不可见，问题位于场景顺序、窗口尺寸或显示环境，而不是字体或纹理。
 
-```cangjie role=probe
-let r = window.renderer
-r.renderFrame(Float32(window.width), Float32(window.height), Color.rgb(15, 23, 42)) {
-    r.fill(Rect(40.0, 40.0, 160.0, 90.0), Color.rgb(255, 255, 255))
-}
-```
-
-恢复内容时用成对的裁剪和视口操作。下面修复显式保证 `popClip`，`renderFrame` 在闭包返回后统一提交。确认裁剪内绿块和裁剪外橙块都处于预期位置。
-
-```cangjie role=fix
-r.renderFrame(width, height, Color.rgb(15, 23, 42)) {
-    r.pushClip(Rect(40.0, 40.0, 180.0, 100.0))
-    r.fill(Rect(20.0, 20.0, 240.0, 140.0), Color.rgb(34, 197, 94))
-    r.popClip()
-    r.fillRoundedRect(Rect(260.0, 40.0, 140.0, 70.0), 12.0, Color.rgb(251, 146, 60))
-}
-```
+恢复内容时成对调用 `pushClip` 与 `popClip`。先在裁剪区域内画一个越界的绿色矩形，再退出裁剪并在旁边画橙色矩形；两者都处于预期位置，才能证明裁剪栈已经恢复。`renderFrame` 在绘制体返回后统一结束并提交场景。
 
 ### 症状二：画面模糊、窗口缩放后裁切或鼠标点击偏移
 

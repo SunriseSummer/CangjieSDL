@@ -2,7 +2,7 @@
 
 # WindowsFileTime
 
-`sdl.system` 包中的 public struct
+位于 `sdl.system` 包的公开结构体。
 
 Windows FILETIME 的高低 32 位组合（1601-01-01 起算的 100 纳秒滴答），与 SDL 时间互转时使用。
 

@@ -18,23 +18,7 @@
 
 事件层负责“翻译”，状态层负责“记住”，更新层负责“持续作用”。例如 `KeyDown Left` 把 `leftHeld` 设为 true，`KeyUp Left` 设回 false，`updatePlayer(dt)` 每帧根据布尔值积分位移。单次动作可过滤 `repeat = true`，持续状态通常接受重复事件也无害，因为只是再次赋同一个值。
 
-下面的反例把每次按键事件直接变成位移，操作系统重复频率会影响速度。
-
-```cangjie role=contrast
-case UiEvent.KeyDown(Key.Right, _) => playerX += 12.0
-case UiEvent.KeyDown(Key.Left, _) => playerX -= 12.0
-```
-
-稳定结构保存状态，并在统一更新阶段使用时间步长。
-
-```cangjie role=trace
-case UiEvent.KeyDown(Key.Right, _) => input.rightHeld = true
-case UiEvent.KeyUp(Key.Right) => input.rightHeld = false
-
-if (input.rightHeld) {
-    playerX += playerSpeed * dt
-}
-```
+不要在 `KeyDown` 分支里直接移动固定距离，这会让操作系统的按键重复频率决定速度。`KeyDown(Key.Right, _)` 只把 `rightHeld` 设为 `true`，对应的 `KeyUp` 再设回 `false`；统一更新阶段根据 `playerSpeed * dt` 计算位移。完整实现见[实时小游戏](../tutorials/real-time-game.md)。
 
 ## 选择与取舍
 
@@ -46,7 +30,7 @@ if (input.rightHeld) {
 
 计算器的鼠标命中与 `TextInput` 最终都调用 `press(state, label)`，因此逻辑不关心设备。雷霆战机把方向键和空格转换成 `InputState`，系统每帧读取。拖放应用应在 DropBegin 清空本次收集，逐个接收 DropFile/DropText，在 DropComplete 后一次处理，避免文件还没收齐就开始耗时加载。
 
-测试输入时记录事件种类、坐标、repeat 和当前状态，但不要把每帧所有 MouseMove 永久写日志。近迁移练习是为计算器增加鼠标按下反馈：Down 记录标签，Move 可更新是否仍在按钮内，Up 触发并清除；同一逻辑可迁移到游戏菜单。
+测试输入时记录事件种类、坐标、重复标志和当前状态，但不要把每帧所有 `MouseMove` 永久写入日志。一个实用练习是为计算器增加鼠标按下反馈：按下时记录按钮，移动时更新指针是否仍在区域内，抬起时触发并清除；同一逻辑也适用于游戏菜单。
 
 ## 常见误解
 

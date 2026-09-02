@@ -2,7 +2,7 @@
 
 # MessageBoxKind
 
-`sdl.dialogs` 包中的 public enum
+位于 `sdl.dialogs` 包的公开枚举。
 
 消息框的严重级别，决定原生对话框的图标样式。
 

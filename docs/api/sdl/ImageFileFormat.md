@@ -2,7 +2,7 @@
 
 # ImageFileFormat
 
-`sdl` 包中的 public enum
+位于 `sdl` 包的公开枚举。
 
 [`Surface`](Surface.md) 能读写的图像文件格式。
 

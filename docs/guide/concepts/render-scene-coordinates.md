@@ -10,48 +10,31 @@
 
 同一个 420×640 计算器在 100% 与 200% 系统缩放下，应用布局都应保持 420×640 的逻辑关系，但实际像素数量可能不同。若绘制用实际像素、命中测试却用逻辑坐标，鼠标会点偏；若字体和矩形分别乘不同缩放，文字会溢出；若窗口缩放后继续把 `beginScene` 设为旧尺寸，画面会被拉伸或裁掉。
 
-`WindowSpec.scale` 是应用要求的逻辑缩放，非法的非正值会归一化为 1。`highDpi` 决定是否请求高像素密度窗口。`WindowDisplayMetrics` 明确分开四个量：`contentScale` 是应用逻辑单位到原生窗口坐标，`pixelDensity` 是原生坐标到后备像素，`renderScale` 是两者乘积，`displayScale` 是尚未叠加应用 zoom 的 SDL 显示缩放。`sizeInPixels()` 是实际像素尺寸，`width`/`height` 是当前逻辑尺寸；两者回答不同问题。
+`WindowSpec.scale` 是应用要求的逻辑缩放，非正值按 1 处理；`highDpi` 决定是否请求高像素密度窗口。`WindowDisplayMetrics` 分开记录四个量：`contentScale` 表示逻辑单位到窗口坐标，`pixelDensity` 表示窗口坐标到后备像素，`renderScale` 是两者乘积，`displayScale` 是尚未叠加应用缩放的 SDL 建议值。`sizeInPixels()` 返回实际像素尺寸，`width` 和 `height` 返回逻辑尺寸。
 
 ## 工作模型
 
-先用逻辑坐标定义 `Rect`、`Point` 和 `Size`，事件中的鼠标坐标也按同一逻辑空间解释。每帧把当前逻辑宽高交给 `renderFrame`；它会成对执行 begin/resolve/present，并在绘制抛错时恢复目标、scale 和 clip 而不呈现残缺帧。需要分段截图或手工控制提交时，可使用 `beginRenderPass` 的资源块，或最低层的 `beginScene/endScene/present`。渲染器按 `supersample` 建立更大的离屏目标，在场景结束时解析回窗口。超采样改善几何边缘，但会增加像素工作量，不应把它当作布局缩放。
+先用逻辑坐标定义 `Rect`、`Point` 和 `Size`，鼠标事件也使用同一坐标空间。每帧把当前逻辑宽高交给 `renderFrame`；它会完成场景开始、离屏解析和提交，并在绘制抛错时恢复渲染状态。需要在场景结束后、提交前截图时，可使用 `beginRenderPass`；只有需要完全控制边界时才直接调用 `beginScene`、`endScene` 和 `present`。超采样会增加内部绘制像素，但不会改变布局尺寸。
 
-整个 renderer 状态面（包括无头查询、诊断计数、命令录制和 `RenderPass`）都绑定创建它的仓颉线程。后台线程可以准备模型、布局输入或不可变 action，但必须回到 owner 线程才能查询或调用渲染 API；错误线程在接触状态前即被拒绝。这让 target、clip、字体缓存、命令 epoch 与资源生命周期保持一个可推理的顺序，而不是依赖某个最终 SDL 绘制调用偶然发现竞态。
+整个 `Renderer` 状态，包括无窗口查询、诊断计数、命令录制和 `RenderPass`，都绑定创建它的仓颉线程。后台线程可以准备模型或布局输入，但查询和调用渲染 API 必须回到创建线程。这样渲染目标、裁剪、字体缓存、命令版本和资源生命周期始终按一个顺序变化。
 
-下面的对比把实际像素尺寸直接当布局尺寸，在高 DPI 屏上会让卡片逻辑上变大，并破坏事件坐标一致性。
-
-```cangjie role=contrast
-let pixels = window.sizeInPixels()
-renderer.beginScene(Float32(pixels.width), Float32(pixels.height), background)
-let button = Rect(40.0, 40.0, Float32(pixels.width) - 80.0, 64.0)
-```
-
-稳定做法以窗口逻辑尺寸构图，只把像素密度用于诊断或选择资源分辨率。
-
-```cangjie role=trace
-let logicalWidth = Float32(window.width)
-let logicalHeight = Float32(window.height)
-renderer.renderFrame(logicalWidth, logicalHeight, background) {
-    let button = Rect(40.0, logicalHeight - 104.0, logicalWidth - 80.0, 64.0)
-    renderer.fillRoundedRect(button, 12.0, accent)
-}
-```
+布局应读取 `window.width` 和 `window.height`，并把它们传给 `renderFrame`。`sizeInPixels()` 只用于诊断或选择图片分辨率；若用它创建布局矩形，高 DPI 屏上的界面会在逻辑坐标中被重复放大，鼠标命中也会偏移。
 
 ## 选择与取舍
 
-固定逻辑尺寸适合像素风游戏和简单工具，可把窗口设为不可调整大小；自适应布局适合桌面应用，应在每帧或尺寸变化时重算矩形。默认 `supersample = 0` 使用 Auto：物理后备密度不足 2 像素/逻辑单位时尝试补到 2x，已达到该密度时直接 1x，避免高 DPI 后备缓冲再做整帧 2x 而支付约 4 倍像素工作。Auto 的 2x 目标还受 32 Mi 像素预算与 SDL 最大纹理边长约束：4K 2x 目标约 33.18M 像素、126.6 MiB RGBA8，仍被保留；5K 2x 目标约 58.98M 像素、225 MiB，会回退直接绘制。需要可复现实验或固定质量策略时显式指定 1 或 2；显式值不受框架像素预算限制，更高值只应在静态场景实测画质与成本后采用。垂直同步限制提交节奏，超采样决定内部绘制分辨率，它们互不替代。
+固定逻辑尺寸适合像素风游戏和简单工具；自适应桌面应用应在尺寸变化后重新计算布局。默认 `supersample = 0` 表示自动选择：物理密度低于 2 像素/逻辑单位时尝试 2 倍，否则直接绘制。自动方案还受 32 Mi 个目标像素和硬件最大纹理边长限制，避免超大窗口申请过多显存。显式正数表示固定请求，`1` 为关闭；它不受框架像素预算限制，但仍受算术、硬件和实际分配能力限制。垂直同步控制提交节奏，超采样控制内部绘制分辨率，两者用途不同。
 
-用 `renderer.renderSamplingStats()` 可以把策略从猜测变成证据：`targetWidth × targetHeight` 是计划像素数，`estimatedTargetBytes` 是 RGBA8 目标成本，`status` 区分密度已满足、像素预算、硬件边长、输出不可用和原生分配失败。图片资源需要另一个选择：若纹理本身分辨率低，超采样不会创造细节；应根据 `pixelDensity` 选择合适资源，再用逻辑目的矩形布局。文字由字体后端按字号绘制，仍要用同一字号测量和绘制，不要再手工乘设备缩放。
+`renderer.renderSamplingStats()` 可解释当前选择：`targetWidth × targetHeight` 是计划像素数，`estimatedTargetBytes` 是 RGBA8 内存估算，`status` 给出直接绘制、预算限制、硬件限制或分配失败等原因。低分辨率图片不会因超采样获得新细节；仍应根据 `pixelDensity` 选择资源，再用逻辑矩形布局。
 
 ## 应用这个模型
 
-标准的窗口 poll/wait API 会在尺寸、像素大小或显示缩放事件返回前刷新动态尺度，下一帧重新计算卡片、按钮和裁剪区；直接使用原生事件时才手工调用 `refreshDisplayMetrics()`。调试时一次打印逻辑尺寸、`sizeInPixels` 与 `WindowDisplayMetrics` 四个尺度：逻辑尺寸决定布局，像素尺寸证明设备输出，尺度分解可揭示是否把系统 DPI 与应用 zoom 重复相乘。命中错位时把鼠标坐标和按钮 `Rect` 放在同一日志中比较，通常比盲目乘除缩放更快。
+标准的事件轮询和等待方法会在返回尺寸、像素大小或显示缩放事件前刷新动态尺度，下一帧再计算布局。只有直接处理原生事件时才手工调用 `refreshDisplayMetrics()`。调试时同时打印逻辑尺寸、`sizeInPixels()` 和 `WindowDisplayMetrics`：逻辑尺寸决定布局，像素尺寸描述输出，四个尺度可以发现系统 DPI 与应用缩放是否被重复计算。
 
 截图由渲染输出像素生成，尺寸应和实际渲染目标一致；视觉验收同时记录图片宽高和 SHA-256。不同设备抗锯齿细节可能不同，但文字可读、布局不裁切、交互命中一致是稳定标准。
 
 ## 常见误解
 
-“高 DPI 就是把所有坐标乘 2”是错误的；窗口和渲染器已经处理坐标映射。`displayScale` 也不是永远等于 `pixelDensity`，平台可分别报告内容缩放和像素密度。`beginScene` 不是普通 `clear` 的别名，它还管理超采样目标；若选择 `drawDirect` 或直接 `clear/present`，就要清楚自己放弃了哪部分场景处理。最后，不要在标准事件入口已自动刷新后再叠加一次自定义缩放。
+“高 DPI 就是把所有坐标乘 2”并不正确，窗口和渲染器已经处理坐标映射。`displayScale` 也不一定等于 `pixelDensity`，因为平台可以分别报告内容缩放和像素密度。`beginScene` 还负责超采样目标，不是普通的清屏方法；不要在标准事件入口已经刷新尺度后再叠加一次自定义换算。
 
 ## 相关 API
 

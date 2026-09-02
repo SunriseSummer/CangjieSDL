@@ -2,7 +2,7 @@
 
 # WindowFlash
 
-`sdl` 包中的 public enum
+位于 `sdl` 包的公开枚举。
 
 任务栏/窗口闪烁请求的方式，传给 [`SdlWindow.flash`](SdlWindow.md#flash)。
 

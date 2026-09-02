@@ -16,29 +16,7 @@ Surface 是 CPU 可以读取和修改的像素表面，Texture 是与 Renderer �
 
 典型初始化流程是“读文件到 Surface → 必要时检查或改像素 → 上传为 Texture → 关闭 Surface”；帧循环只使用 Texture；退出时先关闭 Texture，再关闭窗口。若程序还要保存修改后的 CPU 图像，可让 Surface 生命周期延长，但要明确它与 Texture 内容不会自动双向同步。
 
-下面的对比把图片加载放进每帧循环，虽然容易写，却会不断创建和关闭资源。
-
-```cangjie role=contrast
-while (running) {
-    try (image = Surface.load("badge.png")) {
-        try (texture = renderer.textureFromSurface(image)) {
-            renderer.texture(texture, destination)
-        }
-    }
-}
-```
-
-稳定结构在初始化阶段创建一次纹理，帧循环只借用。
-
-```cangjie role=trace
-try (surface = Surface.load("badge.png")) {
-    try (texture = renderer.textureFromSurface(surface)) {
-        while (running) {
-            drawScene(renderer, texture)
-        }
-    }
-}
-```
+图片资源应在初始化阶段加载并上传，帧循环只借用已经创建的 `Texture`。把 `Surface.load` 和 `textureFromSurface` 放进每帧循环会反复解码、分配和传输。完整的嵌套资源写法见[图片、纹理与截图](../how-to/images-textures-screenshot.md)。
 
 ## 选择与取舍
 

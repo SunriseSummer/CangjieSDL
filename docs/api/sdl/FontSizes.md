@@ -2,7 +2,7 @@
 
 # FontSizes
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 渲染器与应用共用的标准字号常量集合（点值）。[`Renderer.text`](Renderer.md#text) 系列方法的 `pointSize` 参数默认取 `BODY`。
 

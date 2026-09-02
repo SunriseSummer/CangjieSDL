@@ -2,7 +2,7 @@
 
 # FrameInfo
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 以毫秒计的帧计时信息：`elapsedMs` 为 SDL 初始化以来的总时长，`deltaMs` 为距上一帧的间隔。动画按 `deltaMs` 推进，可避免动画速度随帧率变化。
 

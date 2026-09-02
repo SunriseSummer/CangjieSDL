@@ -2,7 +2,7 @@
 
 # WindowAspectRatio
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 窗口宽高比约束的上下界，由 [`SdlWindow.aspectRatio`](SdlWindow.md#aspectratio) 返回。0 表示对应方向不限制。
 

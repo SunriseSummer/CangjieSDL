@@ -1,10 +1,8 @@
-[sdl](../index.md) › [sdl](index.md) › RenderCommandBuffer
+[API 参考](../index.md) › [sdl](index.md) › RenderCommandBuffer
 
 # RenderCommandBuffer
 
-由一个 [`Renderer`](Renderer.md) 录制的不可变绘制命令序列。命令保存颜色、几何、clip、文本参数和显式
-[`Texture`](Texture.md) 句柄，不保存可执行闭包，也不截取祖先背景；因此它适合作为透明 display list 重放，
-而不是每节点 GPU 位图缓存。
+由一个 [`Renderer`](Renderer.md) 录制的不可变绘制命令序列。缓冲保存绘制参数和纹理引用，不保存应用闭包；重复播放时不会再次执行最初的业务或组件代码。
 
 ```cangjie
 public class RenderCommandBuffer {
@@ -18,48 +16,43 @@ public class RenderCommandBuffer {
 }
 ```
 
-缓冲只能交回创建它的 Renderer。显式 renderer epoch 改变（例如 `setScale` 或设备资源释放）以及任一捕获
-Texture 已关闭时，`isReplayable` / `replay` 在提交任何命令前返回 `false`；调用方应重新录制或走普通绘制。
-底层绘制本身失败时仍抛出 `SdlException`。重放始终恢复调用方进入时的 clip 栈，即使中途抛错也不会污染
-后续兄弟绘制。
+## 何时使用
 
-所有公开操作（包括 `stats`、边界与可重放性查询）都必须在所属 Renderer 线程调用，错误线程抛出
-`IllegalStateException`。根入口只检查一次线程/生命周期；验证后的子缓冲和 slot 使用内部已验证路径递归，
-因此安全边界不会把一次层次查询放大成每节点线程检查。
+静态背景、图标或其他重复绘制内容可通过 `Renderer.recordCommands` 录制一次，再跨帧重放。缓冲只接受创建它的渲染器；缩放或设备状态变化、捕获的纹理关闭，或者引用的子槽无效后，重放会在绘制前返回 `false`。
 
-`replayIntersecting` 保留本缓冲的直接命令，但通过 [`RenderCommandSlot`](RenderCommandSlot.md) 层次只访问当前
-paint bounds 与 damage 相交的子树。连续且具有稳定 replay bounds 的 slot run 在录制结束时编译为有序持久
-BVH，查询和预验证为典型 `O(log n + k)`；没有稳定边界的 run 安全回退线性扫描。区外无效子树不影响局部
-重放，相交前沿仍先由 `isReplayableIntersecting` 完整验证，失败时不会半画。
+`replayIntersecting` 用于局部重绘。它始终保留当前缓冲中的直接命令，只跳过绘制边界与 `damage` 不相交的子槽。相交部分会先完整验证，因此不会出现画到一半才发现资源失效的情况。
 
-`hasSceneReferences()` 区分“直接命令很少”与“通过稳定 scene slot 代表大型子树”：它只查询本层是否持有
-子场景引用，不展开或复制子缓冲。缓存策略可据此保留层次边界，同时继续按本层增量内存计费。
-
-连续至少四条、类型与颜色相同的 point/rect/fill-rect 会在录制完成时编译为批次。回放不再临时构造 Cangjie 集合，Renderer 还会复用按需扩容的原生提交缓冲。任何颜色、clip、文本、纹理或其他命令都会切断批次；实现不按材质跨命令排序，因此透明混合与 z 序保持不变。批次诊断见 [`RenderCommandBufferStats`](RenderCommandBufferStats.md)。
-
-嵌套录制是隔离的；把内层缓冲直接 `replay` 到仍在录制的同一 Renderer，会按原 z 序把值命令附加进外层，
-不会执行 widget 闭包。若祖先应保留可替换的子树边界，改用 [`RenderCommandSlot`](RenderCommandSlot.md)：外层只
-保存稳定引用，子缓冲更新不再复制到祖先。录制时传入的可变点集和 alpha 集会复制，之后修改调用方集合不会改变
-缓冲。
+所有公开方法都只能在所属渲染器的创建线程调用，否则抛出 `IllegalStateException`。
 
 ## 示例
 
-```cangjie
-let commands = renderer.recordCommands {
-    renderer.pushClip(Rect(0.0, 0.0, 120.0, 60.0))
-    renderer.fillRoundedRect(Rect(4.0, 4.0, 112.0, 52.0), 8.0, Color.rgb(35, 48, 70))
-    renderer.text("cached", 16.0, 18.0, Color.rgb(245, 245, 248))
-    renderer.popClip()
-}
+```cangjie verify role=complete
+package docexample
 
-if (!commands.replay(renderer)) {
-    // renderer/resource epoch changed: re-record the current state.
+import sdl.{Color, Rect, Renderer}
+
+main(): Unit {
+    let renderer = Renderer.headless()
+    let commands = renderer.recordCommands {
+        renderer.fill(Rect(0.0, 0.0, 120.0, 40.0), Color.rgb(30, 70, 110))
+    }
+    if (!commands.replay(renderer)) {
+        throw IllegalStateException("render commands must be recorded again")
+    }
+    println("commands=${commands.stats().commandCount}")
 }
 ```
 
-`beginScene`、`present`、视口/缩放修改、截图和其他帧/设备控制不能出现在录制体中；调用会抛出
-`IllegalStateException`，避免录制时意外改变真实 SDL 状态。
+## 录制限制
 
-`paintBounds()` 返回考虑嵌套 clip 后的保守逻辑像素并集；文本使用同一字体度量，描边、软边与旋转内容向外扩张。
-含 `RenderCommandSlot` 时边界按槽的最新子缓冲惰性解析。无绘制命令时为 `None`。它适合 damage、空间索引和
-诊断，不能替代 clip 或 z 序正确性检查。
+录制体内可以调用几何、文字、纹理和裁剪绘制方法。`beginScene`、`present`、视口或缩放修改、截图以及其他帧或设备控制会抛出 `IllegalStateException`。
+
+传入的可变点集和透明度列表会在录制时复制，调用方后续修改不会改变缓冲。相邻且类型、颜色相同的点、矩形轮廓和填充矩形会在录制结束时合并为批次，但不会跨越颜色、裁剪、文字或纹理边界，也不会改变绘制顺序。
+
+`paintBounds()` 返回考虑裁剪后的保守逻辑边界；没有绘制命令时返回 `None`。文字、描边、软边和旋转内容会适当扩张边界。缓冲包含子槽时，边界按子槽的当前内容计算。
+
+## 另请参阅
+
+- [`RenderCommandSlot`](RenderCommandSlot.md) — 在父缓冲不变的情况下替换子命令。
+- [`RenderCommandBufferStats`](RenderCommandBufferStats.md) — 查询命令、批处理、资源和重放计数。
+- [`Renderer.recordCommands`](Renderer.md#recordcommands) — 创建命令缓冲。

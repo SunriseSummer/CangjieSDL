@@ -2,7 +2,7 @@
 
 # DisplayGeometry
 
-`sdl.displays` 包中的 public struct
+位于 `sdl.displays` 包的公开结构体。
 
 显示器的几何信息：完整边界、去除任务栏等系统区域后的可用边界，以及系统建议的内容缩放。
 

@@ -32,15 +32,7 @@ Copy-Item .\target\release\bin\app.exe .\release\
 Copy-Item ..\sdl\.sdl3\SDL3.dll, ..\sdl\.sdl3\SDL3_ttf.dll .\release\
 ```
 
-在应用启动最前面保留简短版本探针，便于用户报告环境。它基于平台教程的完整程序增加 SDL 版本，不替代真实窗口测试。
-
-```cangjie role=patch
-import sdl.{sdlRevision, sdlVersion}
-
-println("sdlVersion=${sdlVersion()}")
-println("sdlRevision=${sdlRevision()}")
-println("platform=${platformName()}")
-```
+在应用启动最前面打印 `sdlVersion()`、`sdlRevision()` 和 `platformName()`，便于用户报告环境。这只能证明程序已经进入仓颉入口并加载相应原生库，不能替代真实窗口和字体测试。
 
 复制完成后，从 `release` 目录直接运行，记录标准输出和退出码。GUI 应用还要实际打开窗口、显示文字并关闭，才能同时验证 SDL3、SDL3_ttf、显示环境与字体。
 
@@ -54,15 +46,7 @@ println("platform=${platformName()}")
 
 ## 可以继续修改
 
-为诊断模式打印 Renderer 驱动名和像素密度，但只在成功创建窗口后执行。这个变化能区分“DLL 加载成功”和“真实渲染器建立成功”。
-
-```cangjie role=variation
-try (window = SdlWindow(WindowSpec("部署探针", 480, 280))) {
-    println("renderer=${window.renderer.driverName()}")
-    println("pixelDensity=${window.pixelDensity()}")
-    runVisibleSmokeFrame(window)
-}
-```
+诊断模式还应在成功创建窗口后打印 `window.renderer.driverName()` 和 `window.pixelDensity()`，再显示至少一帧并短暂停留。这样可以区分“动态库已加载”和“窗口、字体及真实渲染器已经建立”。
 
 ## 相关 API
 

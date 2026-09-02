@@ -2,7 +2,7 @@
 
 # FileDialogFilter
 
-`sdl.dialogs` 包中的 public struct
+位于 `sdl.dialogs` 包的公开结构体。
 
 文件对话框的一条类型过滤器：显示名加分号分隔的扩展名模式（SDL 语法，如 `"png;jpg"`，`"*"` 匹配全部）。
 

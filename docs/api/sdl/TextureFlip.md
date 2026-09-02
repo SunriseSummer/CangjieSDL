@@ -2,7 +2,7 @@
 
 # TextureFlip
 
-`sdl` 包中的 public enum
+位于 `sdl` 包的公开枚举。
 
 旋转绘制纹理时的镜像方式，作为 [`TextureRenderOptions`](TextureRenderOptions.md) 的一项传入 [`Renderer.textureRotated`](Renderer.md#texturerotated)。
 

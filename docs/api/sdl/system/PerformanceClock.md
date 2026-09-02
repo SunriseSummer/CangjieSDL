@@ -2,7 +2,7 @@
 
 # PerformanceClock
 
-`sdl.system` 包中的 public class
+位于 `sdl.system` 包的公开类。
 
 单调高精度计时：毫秒/纳秒计时、性能计数器与高精度延时。适合帧计时与基准测量；需要当前日期和时间时使用 [`Time`](Time.md)。
 

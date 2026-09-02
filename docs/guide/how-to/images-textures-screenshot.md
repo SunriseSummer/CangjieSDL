@@ -10,29 +10,11 @@
 
 ## 准备工作
 
-先阅读[Surface、Texture 与图片](../concepts/surface-texture-image.md)。准备一张合法 `badge.png`，放在示例运行目录可访问的位置。首个窗口的 try-with-resources 是外层拥有者；纹理资源块应包住事件与渲染循环，使纹理先关闭、窗口后关闭。
+先阅读[Surface、Texture 与图片](../concepts/surface-texture-image.md)。准备一张合法 `badge.png`，放在示例运行目录可访问的位置。窗口的 `try (...)` 是外层资源块，纹理资源块包住事件与渲染循环，因此退出时会先关闭纹理、再关闭窗口。
 
 ## 操作步骤
 
-在创建窗口之后、进入 `while` 之前加载纹理，并把原循环放进纹理资源块。绘制时给出逻辑目标矩形；按 `S` 时在 `present` 后保存一次截图，避免每帧覆盖同一文件。
-
-```cangjie role=patch
-try (badge = window.renderer.loadTexture("badge.png")) {
-    var saved = false
-    while (running) {
-        handleEvents(window)
-        let r = window.renderer
-        r.beginScene(Float32(window.width), Float32(window.height), Color.rgb(15, 23, 42))
-        r.texture(badge, Rect(64.0, 84.0, 256.0, 144.0))
-        r.endScene()
-        r.present()
-        if (saveRequested && !saved) {
-            r.captureBmp("window-capture.bmp")
-            saved = true
-        }
-    }
-}
-```
+在创建窗口之后、进入循环之前调用 `window.renderer.loadTexture("badge.png")`，并让纹理资源块包住整个事件和渲染循环。每帧用逻辑目标矩形调用 `texture`；需要截图时，在完整场景提交后只调用一次 `captureBmp("window-capture.bmp")`，避免每帧覆盖同一文件。
 
 若要先检查像素或生成图片，使用 `try (surface = Surface.load(...))`，再 `textureFromSurface(surface)`。上传后若不再读 CPU 像素，可立即离开 Surface 资源块，只让 Texture 跨帧存在。
 
@@ -46,16 +28,7 @@ try (badge = window.renderer.loadTexture("badge.png")) {
 
 ## 可以继续修改
 
-只绘制图集中的一个区域，并围绕目标中心旋转、水平翻转。这个变化同时验证 source Rect、旋转和 TextureRenderOptions，而不是简单换文件。
-
-```cangjie role=variation
-let options = TextureRenderOptions(
-    source: Some(Rect(64.0, 0.0, 64.0, 64.0)),
-    center: Some(Point(48.0, 48.0)),
-    flip: TextureFlip.Horizontal
-)
-renderer.textureRotated(badge, Rect(360.0, 120.0, 96.0, 96.0), 18.0, options: options)
-```
+用 `TextureRenderOptions` 把源区域设为图集中的 64×64 矩形，旋转中心设为 96×96 目标矩形的中心，并选择 `TextureFlip.Horizontal`；随后用 `textureRotated` 绘制。这样可以同时验证图集裁剪、旋转中心和水平翻转。
 
 ## 相关 API
 

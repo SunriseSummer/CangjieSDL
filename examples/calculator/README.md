@@ -1,18 +1,21 @@
-# 计算器示例
+# Calculator 教程：从输入事件到可绘制状态
 
-一个 420×640 固定尺寸的四则运算计算器，覆盖图形应用最常见的三类需求：指针命中测试、
-键盘文本输入与自定义控件绘制。建议先运行示例，再对照本文阅读源码。
+这个 420×640 的四则运算计算器是学习 CangjieSDL 应用结构的起点。它把鼠标命中、键盘文本输入、
+业务状态机和自绘界面放进一个足够小的项目，让你能完整追踪一次交互，而不被复杂工程结构分散注意力。
 
 ![计算器运行效果](../.images/calculator.png)
 
-## 你将学会
+## 学完以后
 
-- 用 try-with-resources 管理窗口与渲染资源。
-- 把鼠标点击和键盘文本输入统一翻译为计算器按键命令。
-- 用 `Rect.contains` 做命中测试，用 `Option` 表达“当前没有待执行运算”。
-- 用圆角填充、描边、软阴影和文字度量组合出完整桌面界面。
+你应该能够：
 
-## 运行
+- 用 `SdlWindow` 建立窗口，并用资源作用域保证退出时释放原生对象；
+- 区分文本输入与控制键事件，把鼠标和键盘归一化为同一组业务命令；
+- 用少量字段表达计算器状态，并解释每次按键如何触发状态迁移；
+- 让一份按键布局同时驱动绘制和命中测试，避免坐标重复；
+- 用圆角、描边、软阴影、文字度量和居中接口组合自绘控件。
+
+## 运行和操作
 
 从仓库根目录执行：
 
@@ -22,114 +25,146 @@ cjpm build
 cjpm run
 ```
 
-运行时需要 `SDL3.dll` 与 `SDL3_ttf.dll`，部署方式见 [示例总览](../README.md#运行时动态库)。
+- 鼠标左键可点击所有按键。
+- 键盘可输入 `0-9`、`.`、`+`、`-`、`*`、`/`、`%` 和 `=`。
+- `Enter` 等同于 `=`，`Backspace` 逐位删除，`Esc` 退出。
 
-操作方式：
+如果程序提示找不到 SDL 动态库，请先阅读[示例总览的构建和运行说明](../README.md#构建和运行)。
 
-- 鼠标左键点击按键。
-- 键盘直接输入：`0-9`、`.`、`+`、`-`、`*`、`/`、`%`、`=`；`Enter` 等于 `=`，
-  `Backspace` 逐位删除，`Esc` 退出。
+## 先建立整体模型
 
-## 项目结构
+一次交互沿下面的路径流动：
 
-| 文件 | 职责 |
+```text
+SDL 事件
+  ├─ 鼠标左键 ─→ pressAt ─┐
+  ├─ 文本输入 ─→ pressText ├─→ press(label) ─→ CalcState ─→ draw
+  └─ 控制键 ───────────────┘
+```
+
+这里有两个关键设计：
+
+1. 输入层只负责“这个动作代表哪个按键”，计算逻辑不关心动作来自鼠标还是键盘。
+2. 渲染层只读取 `CalcState`。业务结果先进入状态，再由下一次 `draw` 统一呈现。
+
+先记住这条主线，后面的文件和函数都会自然归位。
+
+## 源码地图
+
+| 文件 | 负责什么 | 阅读时回答的问题 |
+|---|---|---|
+| [`src/main.cj`](src/main.cj) | 创建窗口，进入主循环 | 谁拥有窗口，何时释放？ |
+| [`src/state.cj`](src/state.cj) | 布局、按键描述和 `CalcState` | 哪些数据决定行为，哪些数据决定外观？ |
+| [`src/logic.cj`](src/logic.cj) | 按键分发、运算与结果格式化 | 一次按键会修改哪些状态？ |
+| [`src/loop.cj`](src/loop.cj) | 事件循环、鼠标命中和键盘映射 | 不同输入怎样汇入同一逻辑入口？ |
+| [`src/render.cj`](src/render.cj) | 背景、显示面板与按键绘制 | 当前状态如何变成画面？ |
+| [`src/theme.cj`](src/theme.cj) | 调色板 | 如何只改颜色而不碰绘制流程？ |
+
+推荐按表格顺序阅读，但不要试图记住每个常量。先理解各文件之间传递什么数据，再进入具体实现。
+
+## 第一课：让资源生命周期一眼可见
+
+[`main.cj`](src/main.cj) 只做两件事：创建固定尺寸的 `SdlWindow`，然后调用 `runCalculator`。
+窗口位于 try-with-resources 作用域内，因此正常退出或抛出异常时都会执行 `close()`。这种写法把资源所有权
+放在装配入口，业务函数不需要猜测自己是否应释放窗口。
+
+当前布局使用固定逻辑坐标，所以 `WindowSpec` 将 `resizable` 设为 `false`。若以后开放缩放，需要同时设计
+新的布局规则，而不是只把开关改为 `true`。
+
+## 第二课：一份布局，两种用途
+
+[`state.cj`](src/state.cj) 把窗口、面板和按键网格参数分别放进 `View`、`Panel` 与 `Pad`。每个 `Button`
+同时保存标签、矩形和语义角色：
+
+- [`render.cj`](src/render.cj) 遍历 `state.buttons` 绘制按键；
+- [`loop.cj`](src/loop.cj) 遍历同一集合，用 `Rect.contains` 做鼠标命中测试；
+- [`logic.cj`](src/logic.cj) 接收按键标签，不再处理像素坐标。
+
+因此，`"0"` 键横跨两列这样的布局信息只定义一次。以后移动、增删按键时，显示区域和点击区域不会悄悄
+失去同步。这是数据驱动 UI 的一个小而完整的例子。
+
+## 第三课：把设备输入翻译为业务命令
+
+[`handleEvent`](src/loop.cj) 处理三类输入：
+
+| 输入 | 处理路径 | 为什么这样设计 |
+|---|---|---|
+| 鼠标左键 | 坐标 → `pressAt` → 按键标签 | 命中测试只属于界面层 |
+| `TextInput` | 文本 → Rune → `labelForRune` | 系统已经处理键盘布局和修饰键 |
+| `KeyDown` | `Enter`、`Backspace`、`Escape` | 控制键不是普通文本 |
+
+最终，鼠标点击 `×`、键盘输入 `*` 或 `x` 都会调用 `press(state, "×")`。增加新的输入设备时，只需新增
+一层翻译，不必复制计算逻辑。
+
+窗口创建时 CangjieSDL 会启动文本输入。处理可输入字符时优先使用 `UiEvent.TextInput`，不要根据物理按键
+自行推断字符；后者在不同键盘布局和修饰键组合下并不可靠。
+
+## 第四课：用显式状态描述运算过程
+
+`CalcState` 的核心字段并不多：
+
+| 字段 | 含义 |
 |---|---|
-| [`src/main.cj`](src/main.cj) | 装配入口：创建窗口，进入主循环 |
-| [`src/state.cj`](src/state.cj) | 布局常量、按键网格、`CalcState` 状态类 |
-| [`src/logic.cj`](src/logic.cj) | 计算逻辑：按键分发、四则运算、显示格式化 |
-| [`src/loop.cj`](src/loop.cj) | 事件循环：鼠标命中、键盘映射 |
-| [`src/render.cj`](src/render.cj) | 渲染：背景、显示面板、按键 |
-| [`src/theme.cj`](src/theme.cj) | 调色板 |
+| `display` | 当前输入缓冲，也是显示面板的读数来源 |
+| `stored` | 已保存的左操作数或上一阶段结果 |
+| `pending: ?CalcOp` | 待执行运算；`None` 明确表示尚未选择运算符 |
+| `shouldResetDisplay` | 下一次数字输入应覆盖还是追加 |
+| `hasError` | 除零后的错误状态 |
 
-结构上刻意做了三层分离：logic 不依赖 sdl（纯状态变换，可单独测试），loop 把事件翻译成
-逻辑调用，render 只读状态绘制画面。
+以 `12 + 3 =` 为例：
 
-推荐按 `main.cj → state.cj → logic.cj → loop.cj → render.cj` 阅读：先知道状态长什么样，再看
-输入如何改变状态，最后看同一份状态如何变成画面。
+| 输入后 | `display` | `stored` | `pending` | `shouldResetDisplay` |
+|---|---:|---:|---|---|
+| `12` | `12` | `0` | `None` | `false` |
+| `+` | `12` | `12` | `Add` | `true` |
+| `3` | `3` | `12` | `Add` | `false` |
+| `=` | `15` | `15` | `None` | `true` |
 
-## 入口与资源生命周期
+这张表就是状态机。`press` 负责按标签分发，`chooseOperation`、`finishOperation` 和 `computeWith` 分别负责
+状态迁移的不同阶段。除数接近零时，`fail` 会统一设置错误文本、清除待执行运算，并让下一次有效输入从
+干净状态重新开始。
 
-```cangjie
-main(): Int64 {
-    try (window = SdlWindow(WindowSpec(View.TITLE, View.WIDTH, View.HEIGHT, resizable: false))) {
-        runCalculator(window)
-    }
-    return 0
-}
-```
+## 第五课：按当前状态统一绘制
 
-`SdlWindow` 实现 `Resource`，用 try-with-resources 管理，任何退出路径（包括异常）都会关闭
-窗口并释放渲染器。布局是绝对坐标，因此窗口设为不可调整大小；需要自适应布局时改为
-`resizable: true` 并响应 `UiEvent.WindowResized`。
+[`draw`](src/render.cj) 每帧执行相同顺序：开始场景、绘制背景、绘制显示面板、遍历按键、结束场景、
+提交画面。它不会为“刚刚点击了什么”保留另一套表现状态。
 
-## 状态建模
+值得重点观察三种组合能力：
 
-`state.cj` 中的常量全部收拢进语义类型：`View`（窗口）、`Panel`（显示面板）、`Pad`（按键网格）。
-按键由 `buttonRect(col, row, span)` 从网格坐标换算矩形，`"0"` 键 `span = 2` 占两列，增删按键
-只需改 `buildButtons` 中的一行。
+- `fillRoundedRect`、`strokeRoundedRect` 与 `Pen` 组成按键主体和边框；
+- `fillRoundedRectSoft` 生成带羽化边缘的阴影；
+- `textWidth` 先度量读数，再计算右对齐位置；过宽时切换到较小字号；
+- `textCenter` 直接在按键矩形内居中标签，不再手算基线和水平偏移。
 
-`CalcState` 是典型的“标准计算器”状态机：
+背景渐变使用多条纯色矩形近似完成。这不是唯一方案，却很好地说明了 CangjieSDL 的即时绘制接口如何
+组合成更高层的视觉效果。
 
-- `display`：当前读数文本（唯一的输入缓冲）。
-- `stored` 与 `pending`：已存左操作数与待执行运算，`pending: ?CalcOp` 用 `Option` 表达
-  “尚未选择运算符”。
-- `shouldResetDisplay`：按过运算符后，下一个数字键开始新数而非追加。
-- `hasError`：除零后进入错误态，任何输入先清盘再生效。
+## 动手练习
 
-## 事件循环
+按下面顺序修改，每次只验证一个概念。
 
-```cangjie
-while (state.isRunning) {
-    var event = window.pollEvent()
-    while (let Some(e) <- event) {
-        handleEvent(state, e)
-        event = window.pollEvent()
-    }
-    draw(window.renderer, state)
-    window.delay(View.FRAME_DELAY_MS)
-}
-```
+### 练习 1：调整布局，不改交互代码
 
-每帧先把事件队列取空（`pollEvent` 返回 `None` 为止），再整体重绘。垂直同步默认开启，
-`present` 会对齐显示器刷新，`delay(8)` 进一步降低空转占用。
+修改 [`state.cj`](src/state.cj) 中的 `Pad` 参数，让按键间距更大。验收时确认视觉间距和鼠标命中区域同步
+变化；如果还需要改 `pressAt`，说明布局数据仍有重复。
 
-两条输入路径都翻译成同一个 `press(state, label)` 调用：
+### 练习 2：增加按下反馈
 
-- 鼠标：`UiEvent.MouseDown(MouseButton.Left, x, y)` 事件坐标就是逻辑坐标，逐个按键做
-  `rect.contains(x, y)` 命中测试。
-- 键盘：字符类输入不匹配 `KeyDown` 扫描码，而是监听 `UiEvent.TextInput`；窗口创建时
-  已自动开启文本输入，系统处理好修饰键与键盘布局后交付字符串，示例只需按 `Rune` 映射到
-  按键标签（`*` 与 `x` 都映射到 `×`）。`Enter`、`Backspace`、`Esc` 这类控制键仍走 `KeyDown`。
+在状态中记录当前按下的按钮；在 `MouseDown` 和 `MouseUp` 更新它；渲染时让对应矩形向下偏移 2 像素。
+验收标准是只有当前按钮移动，松开或指针离开后恢复，计算结果仍只触发一次。
 
-## 渲染
+### 练习 3：为纯逻辑增加测试
 
-每帧固定四步：
+用一串 `press` 调用驱动 `CalcState`，至少覆盖 `12 + 3 =`、连续运算、小数、退格和除零。测试只检查状态，
+不创建窗口。这样可以直观看到“输入归一化”和“状态先于渲染”带来的可测试性。
 
-```cangjie
-renderer.beginScene(View.WIDTH_F, View.HEIGHT_F, Pal.BG)   // 清屏 + 进入超采样目标
-// ...全部绘制调用...
-renderer.endScene()                                        // 解析回窗口（抗锯齿在此发生）
-renderer.present()
-```
+## 验证清单
 
-以下几点值得对照源码理解：
+- 鼠标和键盘执行相同运算时结果一致；
+- `Enter`、`Backspace` 和 `Esc` 分别完成确认、删除和退出；
+- 小数点不能在同一数字中重复输入，除零后下一次输入能恢复；
+- 长结果会缩小字号且保持右对齐；
+- 关闭窗口和按 `Esc` 都能正常结束进程。
 
-- 圆角与描边：面板与按键用 `fillRoundedRect` 打底、`strokeRoundedRect` 加 `Pen` 描边，
-  代替旧式直角 `fill` 加 `rect`。
-- 软阴影：按键投影用 `fillRoundedRectSoft(..., feather: 6.0)`，边缘按羽化像素渐隐，
-  一次调用得到无带状伪影的阴影。
-- 文字排版：TTF 文字按 `pointSize` 指定字号（`FontSizes` 提供标准档位）。渲染器没有
-  右对齐接口，`drawTextRight` 用 `textWidth` 度量后左移绘制；读数超宽时降字号，这就是
-  度量驱动排版的最小示例。按键标签直接 `textCenter(label, rect, ...)` 在矩形内居中。
-- 背景渐变：横条带逐行插值颜色近似垂直渐变，简单且足够。
-
-## 扩展方向
-
-1. 给按键加按下反馈：记录 `MouseDown`/`MouseUp`，按下时把按键矩形 `shift(0.0, 2.0)` 再绘制。
-   验收标准是只有当前按下的按钮发生位移，松开后立即恢复。
-2. 支持连按 `=` 重复上一次运算（记录最后一次操作数），用 `2 + 3 = =` 验证结果依次为 5、8。
-3. 为 `logic.cj` 添加单元测试：用 `press` 序列驱动 `CalcState`，至少覆盖正常运算、连续运算、
-   小数输入和除零错误态。
-
-遇到动态库或直接运行 exe 的问题，请查阅
-[部署、动态库与 FFI](../../docs/deployment-and-ffi.md)。
+源码修改后先运行 `cjpm build`，再运行 `cjpm run` 完成输入与视觉验收。要继续学习按帧更新、持续输入和
+实体系统，请进入 [Thunder Fighter 教程](../thunder/)。

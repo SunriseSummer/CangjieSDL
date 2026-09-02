@@ -2,7 +2,7 @@
 
 # DisplayModes
 
-`sdl.displays` 包中的 public struct
+位于 `sdl.displays` 包的公开结构体。
 
 显示器的桌面显示模式与当前显示模式；SDL 无法提供时对应项为 `None`。
 

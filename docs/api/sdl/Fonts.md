@@ -2,7 +2,7 @@
 
 # Fonts
 
-`sdl` 包中的 public class
+位于 `sdl` 包的公开类。
 
 进程级注册表，把应用字体名映射到有序字体链，类似 CSS 的 `font-family` / `@font-face`。启动时注册一次名字，之后在 [`Renderer.text`](Renderer.md#text) 的 `font` 参数中按名引用；渲染器在首次使用时懒加载并缓存字体文件。
 
@@ -14,7 +14,7 @@ public class Fonts
 
 ## 说明
 
-解析是宽容的：主字体缺少字形时按 `fallbackPaths` 顺序使用同字号、同样式 fallback，最后自动落到平台 UI 字体；未注册名字或无法打开的路径同样回退。注册只记录映射、不访问文件系统，因此可在任何窗口创建之前调用。注册表为全局且未加锁，与单线程 UI 模型一致；请在主线程、开始渲染之前注册字体。
+主字体缺少字形时，会按 `fallbackPaths` 的顺序尝试同字号、同样式的回退字体，最后使用平台 UI 字体。字体名称未注册或文件无法打开时也会回退。注册操作只保存映射，不访问文件，因此可以在创建窗口前完成。注册表是未加锁的进程级状态，应在主线程、首次渲染前修改。
 
 ## 示例
 
@@ -47,7 +47,7 @@ main(): Unit {
 |---|---|
 | [`static register(name: String, path: String)`](#register) | 把名字映射到字体文件路径（`.ttf`、`.ttc` 或 `.otf`），重复注册同名即替换。 |
 | [`static registerFamily(name: String, primaryPath: String, fallbackPaths!: Array<String>)`](#registerfamily) | 注册主字体与有序缺字回退链。 |
-| [`static fallbackPathsFor(name: String)`](#fallbackpathsfor) | 返回独立的 fallback 路径数组。 |
+| [`static fallbackPathsFor(name: String)`](#fallbackpathsfor) | 返回独立的回退字体路径数组。 |
 | [`static pathFor(name: String)`](#pathfor) | 返回名字对应的注册路径，未注册时为 `None`。 |
 | [`static isRegistered(name: String)`](#isregistered) | 判断名字是否已注册。 |
 | [`static unregister(name: String)`](#unregister) | 移除注册；从未注册时为空操作。 |
@@ -86,7 +86,7 @@ public static func pathFor(name: String): ?String
 
 ### registerFamily
 
-注册主字体与有序缺字回退链。SDL_ttf 只在当前字体缺少字形时尝试下一项；每个 fallback 以相同字号和样式打开。更改注册会推进 `revision`，现有 Renderer 随后清空字体相关度量与旋转文本缓存。
+注册主字体和按顺序尝试的缺字回退字体。SDL_ttf 只在当前字体缺少字形时尝试下一项，每个字体使用相同字号和样式。更改注册会推进 `revision`，现有渲染器随后清空相关度量与旋转文字缓存。
 
 ```cangjie
 public static func registerFamily(name: String, primaryPath: String,

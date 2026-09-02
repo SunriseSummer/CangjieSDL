@@ -2,7 +2,7 @@
 
 # FileDialogOptions
 
-`sdl.dialogs` 包中的 public struct
+位于 `sdl.dialogs` 包的公开结构体。
 
 发起文件对话框时的选项：类型过滤器、初始目录与是否允许多选。全部字段带默认值，可按需设置。
 

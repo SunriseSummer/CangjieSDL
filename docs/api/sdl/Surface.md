@@ -2,7 +2,7 @@
 
 # Surface
 
-`sdl` 包中的 public class
+位于 `sdl` 包的公开类。
 
 CPU 侧的 RGBA 像素缓冲，包装 SDL_Surface：可新建、从 BMP/PNG 文件加载、逐像素写入并存回 BMP 文件。表面独立于窗口与渲染器存在；要参与 GPU 绘制，先经 [`Renderer.textureFromSurface`](Renderer.md#texturefromsurface) 转为[纹理](Texture.md)。SDL 无法创建、读写、加载或保存表面时，方法把失败状态转换为 `SdlException`；[`close`](#close) 可重复调用。
 

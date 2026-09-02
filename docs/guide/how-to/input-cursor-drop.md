@@ -14,21 +14,7 @@
 
 ## 操作步骤
 
-把下面分支加入原有 `match(event)`。`TextInput` 追加业务文本，控制键不混入字符串；DropBegin 清空本次收集，DropFile 只累积，DropComplete 才调用加载。MouseMove 更新可见坐标，不直接执行耗时任务。
-
-```cangjie role=patch
-case UiEvent.KeyDown(Key.Escape, _) => running = false
-case UiEvent.KeyDown(Key.Backspace, _) => typedText = removeLastRune(typedText)
-case UiEvent.TextInput(text) => typedText = typedText + text
-case UiEvent.MouseMove(x, y) => {
-    pointerX = x
-    pointerY = y
-}
-case UiEvent.DropBegin => droppedPaths.clear()
-case UiEvent.DropFile(path, _, _) => droppedPaths.add(path)
-case UiEvent.DropComplete => openDroppedFiles(droppedPaths)
-case _ => ()
-```
+在事件匹配中，让 Esc 改变运行状态，Backspace 调用按 Unicode 字符删除的业务函数，`TextInput` 追加系统已经组合好的文字，`MouseMove` 只更新逻辑坐标。拖放开始时清空本次集合，`DropFile` 只累计路径，`DropComplete` 才把完整列表交给加载队列。不要在事件分支内执行耗时文件读取。
 
 窗口创建后可用 `Cursor.system(SystemCursor.Pointer)` 创建并激活指针光标；悬停可点击区域时切换 Hand，离开后切回默认。不要每次 MouseMove 都创建新 Cursor，预先创建并复用。
 
@@ -42,19 +28,7 @@ case _ => ()
 
 ## 可以继续修改
 
-加入以指针位置为中心的滚轮缩放，并用物理 `R` 键复位。`MouseWheel` 的载荷顺序是滚动量 x、滚动量 y、指针 x、指针 y；把位置和增量写反会在错误地点缩放。
-
-```cangjie role=variation
-case UiEvent.MouseWheel(_, deltaY, pointerX, pointerY) => {
-    zoom = clampF32(zoom + deltaY * 0.1, 0.5, 3.0)
-    zoomCenter = Point(pointerX, pointerY)
-}
-case UiEvent.KeyDown(Key.Letter(code), false) =>
-    if (code == UInt8(82)) {
-        zoom = 1.0
-        zoomCenter = Point(0.0, 0.0)
-    }
-```
+加入以指针位置为中心的滚轮缩放时，按 `MouseWheel(wheelX, wheelY, pointerX, pointerY)` 的顺序解构；用 `clampF32` 把缩放限制在 0.5 到 3.0，并保存当前指针为中心。物理 R 键可用 `Key.Letter(UInt8(82))` 匹配，且只在 `repeat = false` 时复位。
 
 确认滚轮向上和向下改变缩放，缩放中心跟随当前指针，物理 R 键恢复初始值；文本输入仍只经过 `TextInput`。
 

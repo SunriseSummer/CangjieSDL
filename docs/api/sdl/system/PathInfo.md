@@ -2,7 +2,7 @@
 
 # PathInfo
 
-`sdl.system` 包中的 public struct
+位于 `sdl.system` 包的公开结构体。
 
 一个路径的元信息：条目种类、字节大小与创建/修改/访问三组时间戳（SDL 时间，纳秒）。由 [`FileSystem.pathInfo`](FileSystem.md#pathinfo) 返回。
 

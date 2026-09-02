@@ -2,7 +2,7 @@
 
 # Texture
 
-`sdl` 包中的 public class
+位于 `sdl` 包的公开类。
 
 GPU 侧图像资源，由渲染器创建（[`loadTexture`](Renderer.md#loadtexture) / [`textureFromSurface`](Renderer.md#texturefromsurface)），经 [`Renderer.texture`](Renderer.md#texture) / [`textureRotated`](Renderer.md#texturerotated) / [`texturedStrip`](Renderer.md#texturedstrip) 绘制。颜色调制、不透明度与混合模式设置在纹理上生效于其后的每次绘制。
 

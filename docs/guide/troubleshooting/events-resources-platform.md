@@ -12,35 +12,13 @@
 
 ### 症状一：窗口卡住、输入延迟或角色松键后仍移动
 
-为每帧记录处理事件数、耗时和最后事件类型，检查内层循环是否持续调用 `pollEvent` 直到 None。多窗口时确认只有一个 `SdlEventPump` 消费事件，并按 `metadata.windowId` 路由。把文件加载和网络工作暂时替换为计数，比较响应是否恢复。下面探针将 KeyDown/KeyUp 转换为状态并打印变化；确认按下和抬起各出现一次，状态最终回到 false。
+为每帧记录处理事件数、耗时和最后事件类型，检查内层循环是否持续调用 `pollEvent` 直到 `None`。多窗口时确认只有一个 `SdlEventPump` 消费事件，并按 `metadata.windowId` 路由。把文件加载和网络工作暂时替换为计数，比较响应是否恢复。对于持续按键，记录 `KeyDown` 的 repeat 值和对应 `KeyUp`，确认状态最终恢复为 `false`。
 
-```cangjie role=probe
-case UiEvent.KeyDown(Key.Right, repeat) => {
-    println("right down repeat=${repeat}")
-    rightHeld = true
-}
-case UiEvent.KeyUp(Key.Right) => {
-    println("right up")
-    rightHeld = false
-}
-```
-
-修复时让事件层只更新轻量状态，耗时任务进入队列，更新阶段分批处理；无论是否有事件，每帧都能更新和绘制。确认快速移动鼠标、拖放多个文件和连续按键时窗口仍响应，事件队列不会持续增长。
-
-```cangjie role=fix
-var current = window.pollEvent()
-while (let Some(event) <- current) {
-    translateEvent(event, inputState, workQueue)
-    current = window.pollEvent()
-}
-processWorkBudget(workQueue, milliseconds: UInt64(3))
-update(state, inputState, dt)
-draw(window.renderer, state)
-```
+修复时让事件层只更新轻量状态，耗时任务进入队列，更新阶段按明确的毫秒预算分批处理。每帧先取空事件，再处理一小段工作、更新状态并绘制；即使当前没有事件也不能跳过更新和绘制。快速移动鼠标、拖放多个文件和连续按键时，窗口仍应响应，事件队列也不应持续增长。
 
 ### 症状二：出现“已关闭”、无效纹理或退出时崩溃
 
-列出每个 Resource 的创建、最后使用和关闭位置，检查 Texture/RenderCommandBuffer/TextMeasureSession 是否由当前 Renderer 创建、是否在拥有线程调用，Surface 转 Texture 后谁关闭两者，Cursor 是否仍被激活。若刚收到 `RenderTargetsReset`、`RenderDeviceReset` 或 `RenderDeviceLost`，检查旧命令缓冲的 `isReplayable`，并从 CPU 侧资源描述重建 GPU 状态。修复为嵌套 try-with-resources 或集中 Assets 拥有者，退出时先停止循环、关闭 Texture/Cursor，最后关闭窗口。确认异常与正常退出都只执行一次关闭，关闭后没有定时回调继续绘制。
+列出每个资源的创建、最后使用和关闭位置，检查 `Texture`、`RenderCommandBuffer` 和 `TextMeasureSession` 是否来自当前 `Renderer`，并确认调用线程正确；还要明确 `Surface` 转为 `Texture` 后谁关闭两者，以及 `Cursor` 是否仍在使用。收到 `RenderTargetsReset`、`RenderDeviceReset` 或 `RenderDeviceLost` 后，先调用旧命令缓冲的 `isReplayable`，再从普通应用数据重建 GPU 资源。修复时使用嵌套的 `try (...)` 或集中资源所有者；退出应先停止循环，再关闭纹理和光标，最后关闭窗口。
 
 ### 症状三：文件对话框一直 Pending、全屏无匹配或平台信息为空
 
@@ -56,7 +34,7 @@ draw(window.renderer, state)
 
 ## 避免再次发生
 
-事件层只翻译，业务层不直接拥有窗口；资源创建与关闭放在同一结构附近；平台返回的 Option 与结果枚举不被提前压平。为长任务设置每帧预算，为多窗口与设备插拔保留回归测试。API 库存变化后重跑指南/API 对账，避免文档继续引用已移除成员。
+事件层只负责转换，业务层不直接拥有窗口；资源创建与关闭放在相近位置；平台返回的 `Option` 和结果枚举应保留“不可用”与“失败”等差异。为长任务设置每帧预算，为多窗口与设备插拔保留回归测试。公开 API 变化后重新运行文档检查，避免继续引用已经移除的成员。
 
 ## 相关 API
 

@@ -32,7 +32,7 @@ sdl = { path = "../sdl" }
 
 ## 先建立一个模型
 
-`WindowSpec` 只描述窗口初始条件，`SdlWindow` 拥有原生窗口和渲染器，`UiEvent` 把系统消息变成仓颉枚举，`Renderer` 负责每帧画面。每帧先把事件取空，再用 `renderFrame` 成对完成 begin、绘制、resolve 与 present；绘制体抛错时它仍恢复 render target、scale 与 clip，但不呈现残缺帧。窗口放进 try-with-resources，任何正常或异常退出都会执行关闭。
+`WindowSpec` 描述窗口初始条件，`SdlWindow` 拥有原生窗口和渲染器，`UiEvent` 把系统消息转换为仓颉枚举，`Renderer` 负责每帧画面。每帧先处理完已有事件，再由 `renderFrame` 完成场景开始、绘制、离屏解析和提交。绘制抛出异常时，它会恢复渲染目标、缩放和裁剪状态，但不提交残缺画面。窗口放进 `try (...)` 资源块，正常和异常退出都会关闭。
 
 ## 操作步骤
 
@@ -101,7 +101,7 @@ main(): Unit {
 }
 ```
 
-这个程序只在一个地方拥有窗口，也只通过 `window.renderer` 取得渲染器。`UiEvent.Quit` 只改变循环状态，不在事件分支中手动释放资源；退出 `while` 后，try-with-resources 统一关闭，避免同一资源被关闭两次。
+这个程序只在一个地方拥有窗口，也只通过 `window.renderer` 取得渲染器。`UiEvent.Quit` 只改变循环状态，不在事件分支中手动释放资源；退出 `while` 后由资源块统一关闭。
 
 ## 确认结果
 
@@ -111,18 +111,7 @@ main(): Unit {
 
 ## 接着试一试
 
-把下面片段放到 `renderFrame` 绘制体的文字之后。它根据窗口像素密度显示不同提示，并把卡片内的右侧区域裁剪起来；这同时验证运行时显示信息和裁剪栈，而不是只换一种颜色。
-
-```cangjie role=variation
-let density = window.pixelDensity()
-let clip = Rect(width - 250.0, 62.0, 180.0, 54.0)
-renderer.pushClip(clip)
-renderer.fillRoundedRect(clip, 10.0, Color.rgba(2, 6, 23, 150))
-renderer.text("像素密度 ${density}", clip.x + 12.0, clip.y + 16.0, Color.rgb(253, 230, 138))
-renderer.popClip()
-```
-
-重新运行后，右上角应出现密度读数，文字不会越过裁剪区域。若把窗口移到另一块缩放不同的显示器，密度值可能变化；它是设备事实，不应硬编码为 1 或 2。
+在绘制体中读取 `window.pixelDensity()`，把结果显示在卡片右上角，并用 `pushClip` 与 `popClip` 限制文字区域。重新运行后，文字不应越过裁剪矩形；把窗口移到缩放不同的显示器时，密度值可能变化。它是运行时设备信息，不应硬编码为 1 或 2。
 
 ## 如果没有成功
 

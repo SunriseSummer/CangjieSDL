@@ -2,7 +2,7 @@
 
 # SdlHints
 
-`sdl.system` 包中的 public class
+位于 `sdl.system` 包的公开类。
 
 SDL hint 的读写入口。hint 是进程内的运行时配置开关；多数须在受影响的子系统初始化前设置。`set` 与 `setBool` 在 SDL 拒绝写入时把失败状态转换为 `SdlException`；查询和重置方法按返回值表示结果。
 

@@ -14,23 +14,7 @@
 
 ## 操作步骤
 
-在平台探针中加入下列逻辑。首选项目录调用会确保目录存在，再创建专用子目录；`pathInfo` 用 Option 表示路径不存在。实际写文件可使用标准库 I/O，SDL FileSystem 负责跨平台目录和文件级操作。
-
-```cangjie role=patch
-let root = ApplicationPaths.preferencePath("GuideLab", "SdlNotes")
-let drafts = root + "drafts"
-if (!FileSystem.exists(drafts)) {
-    FileSystem.createDirectory(drafts)
-}
-match (FileSystem.pathInfo(drafts)) {
-    case Some(info) => println("drafts type=${info.entryType}")
-    case None => println("drafts missing")
-}
-let entries = FileSystem.globDirectory(root, pattern: Some("*.json"), caseInsensitive: true)
-for (entry in entries) {
-    println("config=${entry}")
-}
-```
+先用 `ApplicationPaths.preferencePath("GuideLab", "SdlNotes")` 获取并准备应用目录，再在其中建立专用 `drafts` 子目录。创建前查询 `FileSystem.exists`；创建后匹配 `FileSystem.pathInfo` 的 `Some` 与 `None`。需要列出配置时，调用 `globDirectory` 并明确传入 `"*.json"` 和大小写策略。实际文件内容使用仓颉标准库读写，SDL `FileSystem` 负责跨平台的目录和文件操作。
 
 若应用资源随可执行文件分发，先匹配 `ApplicationPaths.basePath()`；None 时给出明确错误或使用已配置替代目录。用户主动选择的文件路径来自对话框，不应被强行搬到首选项目录。
 
@@ -44,19 +28,7 @@ for (entry in entries) {
 
 ## 可以继续修改
 
-为配置更新增加可恢复的备份：先把现有文件复制为 `.bak`，写入成功后再保留或删除备份。这个变化涉及真实文件状态，必须在测试目录中执行。
-
-```cangjie role=variation
-let config = root + "settings.json"
-let backup = root + "settings.json.bak"
-if (FileSystem.exists(config)) {
-    FileSystem.copyFile(config, backup)
-}
-writeSettings(config, settings)
-if (!FileSystem.exists(config)) {
-    throw SdlException("配置写入后不存在")
-}
-```
+为配置更新增加可恢复备份：先检查原文件是否存在，存在时用 `copyFile` 复制为 `.bak`；写入新文件并确认存在后，再按产品策略保留或删除备份。这个练习会真实修改磁盘，只能在明确的测试目录中执行，并且不得覆盖已有用户文件。
 
 ## 相关 API
 

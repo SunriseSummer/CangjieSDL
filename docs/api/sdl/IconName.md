@@ -2,7 +2,7 @@
 
 # IconName
 
-`sdl` 包中的 public enum
+位于 `sdl` 包的公开枚举。
 
 内置矢量图标的名称，交给 [`drawIcon`](functions.md#drawicon) 在 24×24 的坐标网格上绘制圆头线条图标。
 

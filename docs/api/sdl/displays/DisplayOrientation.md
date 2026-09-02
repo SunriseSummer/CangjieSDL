@@ -2,7 +2,7 @@
 
 # DisplayOrientation
 
-`sdl.displays` 包中的 public enum
+位于 `sdl.displays` 包的公开枚举。
 
 显示器的朝向。SDL 报告未知或无法识别的值时映射为 `Unknown`。
 

@@ -2,7 +2,7 @@
 
 # SystemCursor
 
-`sdl.input` 包中的 public enum
+位于 `sdl.input` 包的公开枚举。
 
 操作系统内置的光标形状，交给 [`Cursor.system`](Cursor.md#system) 创建对应的原生光标。
 

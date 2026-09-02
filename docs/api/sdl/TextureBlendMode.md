@@ -2,7 +2,7 @@
 
 # TextureBlendMode
 
-`sdl` 包中的 public enum
+位于 `sdl` 包的公开枚举。
 
 纹理绘制时与目标像素的混合方式，对应 SDL 的 SDL_BLENDMODE_*。
 

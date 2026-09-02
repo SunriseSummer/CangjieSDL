@@ -2,7 +2,7 @@
 
 # FileDialogRequest
 
-`sdl.dialogs` 包中的 public class
+位于 `sdl.dialogs` 包的公开类。
 
 用于跟踪一次正在进行的文件对话框请求。对话框是异步的：[`FileDialogs`](FileDialogs.md) 立即返回本对象，应用在事件循环中轮询 [`isDone`](#isdone)/[`result`](#result)，原生回调把结果写入后即可读取。内部以互斥锁同步，跨线程读取安全。
 
@@ -56,7 +56,7 @@ main(): Unit {
 
 ### result
 
-当前结果快照；回调完成前为 [`FileDialogResult.FileDialogPending`](FileDialogResult.md#filedialogpending)。加锁读取，可在任意线程调用。
+当前结果快照；回调完成前为 [`FileDialogResult.FileDialogPending`](FileDialogResult.md)。加锁读取，可在任意线程调用。
 
 ```cangjie
 public func result(): FileDialogResult

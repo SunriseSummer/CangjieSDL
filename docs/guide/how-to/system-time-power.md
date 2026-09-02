@@ -14,26 +14,7 @@
 
 ## 操作步骤
 
-下面片段分别打印本地日期与区域偏好，测量 5ms 延时，并根据电量决定是否启用高成本背景效果。`percent` 为 None 时选择保守但不报错。
-
-```cangjie role=patch
-let now = Time.currentDateTime(local: true)
-let locale = Time.localePreferences()
-println("date=${now.year}-${now.month}-${now.day}, format=${locale.dateFormat}")
-
-let started = PerformanceClock.counter()
-PerformanceClock.delayNanoseconds(PerformanceClock.millisecondsToNanoseconds(UInt64(5)))
-let elapsed = PerformanceClock.counter() - started
-let elapsedSeconds = Float64(elapsed) / Float64(PerformanceClock.frequency())
-println("elapsedSeconds=${elapsedSeconds}")
-
-let power = powerInfo()
-let allowExpensiveEffects = match (power.percent) {
-    case Some(percent) => percent >= 20
-    case None => false
-}
-println("expensiveEffects=${allowExpensiveEffects}")
-```
+用 `Time.currentDateTime(local: true)` 和 `Time.localePreferences()` 显示本地日期与区域格式。性能测量先读取 `PerformanceClock.counter()`，执行工作后再次读取，并除以 `PerformanceClock.frequency()` 得到秒数。电源策略匹配 `powerInfo().percent`：有值时比较阈值，`None` 时采用保守策略，但不要把未知显示成 0%。[平台诊断工具](../tutorials/platform-toolbox.md)包含可独立编译的完整程序。
 
 游戏帧循环只需要经过时间，可继续使用 `window.ticks()`；需要分析 update 与 draw 微秒级耗时时再用 PerformanceClock。用户界面展示时间时根据 `localePreferences` 选择顺序和 12/24 小时格式，不硬编码某一地区习惯。
 
@@ -47,15 +28,7 @@ println("expensiveEffects=${allowExpensiveEffects}")
 
 ## 可以继续修改
 
-把 DateTimeParts 转为纳秒，再转回 UTC，检查关键字段保持一致。这个变化验证转换路径而不是只读取当前时间。
-
-```cangjie role=variation
-let localNow = Time.currentDateTime(local: true)
-let encoded = Time.toNanoseconds(localNow)
-let utc = Time.toDateTime(encoded, local: false)
-println("localOffset=${localNow.utcOffset}, utcOffset=${utc.utcOffset}")
-println("weekday=${Time.dayOfWeek(localNow.year, localNow.month, localNow.day)}")
-```
+把 `Time.currentDateTime(local: true)` 得到的 `DateTimeParts` 传给 `Time.toNanoseconds`，再用 `Time.toDateTime(..., local: false)` 转为 UTC。比较两者的偏移，并用 `Time.dayOfWeek` 验证日期。外部日期进入这些函数前必须先检查范围。
 
 ## 相关 API
 

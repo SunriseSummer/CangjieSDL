@@ -2,7 +2,7 @@
 
 # FileSystem
 
-`sdl.system` 包中的 public class
+位于 `sdl.system` 包的公开类。
 
 SDL 文件系统操作的入口：建目录、删除、改名、复制、查询，以及按通配模式列出目录。全部方法先拒绝空路径；写操作和目录枚举会把 SDL 失败转换为 `SdlException`。`pathInfo` 无法区分“路径不存在”和底层查询失败，两者都返回 `None`；`exists` 相应返回 `false`。
 

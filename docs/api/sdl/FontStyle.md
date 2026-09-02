@@ -2,7 +2,7 @@
 
 # FontStyle
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 叠加在基础 UI 字体上的文本样式：字重、倾斜与两种线条修饰。不可变值类型，`with…` 系列返回调整后的副本，样式可逐个标志叠加组合，如 `FontStyle(bold: true, italic: true)`。
 

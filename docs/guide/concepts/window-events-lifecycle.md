@@ -14,32 +14,7 @@ GUI 程序不是执行一次绘制就结束。操作系统会持续发送关闭�
 
 把一帧看成四个阶段：收集事件、更新业务状态、根据状态绘制、提交画面。事件阶段只做轻量翻译，耗时文件读取和复杂计算不要阻塞其中；更新阶段不调用对话框或直接绘制；渲染阶段只读已经稳定的帧状态。`delay` 是降低空转的辅助，垂直同步也可能在 `present` 等待，但二者都不能替代事件处理。
 
-下面的反例把绘制放在每个事件之后：没有事件就不刷新，事件很多又重复绘制。
-
-```cangjie role=contrast
-while (running) {
-    if (let Some(event) <- window.pollEvent()) {
-        handle(event)
-        update()
-        draw(window.renderer)
-    }
-}
-```
-
-稳定结构先取空队列，再各做一次更新和绘制；退出只是改变状态，资源关闭留给外层。
-
-```cangjie role=trace
-while (running) {
-    var current = window.pollEvent()
-    while (let Some(event) <- current) {
-        running = handle(event, running)
-        current = window.pollEvent()
-    }
-    update()
-    draw(window.renderer)
-    window.delay(UInt32(8))
-}
-```
+不要把更新和绘制放进单个事件分支：没有事件时画面不会刷新，事件密集时同一帧又会重复绘制。稳定结构应先循环调用 `pollEvent` 直到返回 `None`，再各执行一次更新和绘制；退出事件只改变运行状态，窗口关闭留给外层资源块。完整循环见[创建第一个窗口](../getting-started/first-window.md)。
 
 ## 选择与取舍
 

@@ -2,7 +2,7 @@
 
 # MessageBoxColor
 
-`sdl.dialogs` 包中的 public struct
+位于 `sdl.dialogs` 包的公开结构体。
 
 消息框配色中的一项 RGB 颜色（无 alpha——原生消息框不支持透明）。
 

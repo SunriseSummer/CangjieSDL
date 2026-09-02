@@ -2,9 +2,9 @@
 
 # SdlWindow
 
-`sdl` 包中的 public class
+位于 `sdl` 包的公开类。
 
-与自己的[渲染器](Renderer.md)成对创建、成对关闭的 SDL 窗口。`width`/`height` 与全部事件、绘制坐标都是逻辑像素；动态 DPI 把应用内容缩放、原生窗口坐标与后备像素密度分开，避免 Retina 上重复放大。构造函数初始化视频子系统并开启文本输入，失败抛 `SdlException`；[`close`](#close) 幂等，释放渲染器、窗口与一个视频子系统引用——SDL3 对子系统初始化计数，关掉一个窗口不会拆掉另一个仍开着的窗口的子系统。
+SDL 窗口及其 [`Renderer`](Renderer.md) 的所有者。`width`、`height`、输入事件和绘制都使用逻辑像素；动态 DPI 信息分别记录应用缩放、窗口坐标缩放和后备像素密度，避免重复换算。构造函数初始化视频子系统并开启文字输入，失败时抛出 `SdlException`。关闭窗口会依次释放渲染资源、原生窗口和本窗口持有的视频子系统引用，不会影响仍在运行的其他窗口。
 
 ## 声明
 
@@ -77,7 +77,7 @@ main(): Unit {
 | [`pollEventRecord()`](#polleventrecord) | 取出事件及事件时刻的 window/timestamp/key/modifier 元数据。 |
 | [`waitEventTimeout(timeoutMs: Int32)`](#waiteventtimeout) | 阻塞等待一条事件，超时返回 `None`；负值无限等待。 |
 | [`waitEventRecordTimeout(timeoutMs: Int32)`](#waiteventrecordtimeout) | 带元数据的阻塞事件入口。 |
-| [`refreshDisplayMetrics()`](#refreshdisplaymetrics) | 重读动态 DPI，并更新 Renderer scale/epoch。 |
+| [`refreshDisplayMetrics()`](#refreshdisplaymetrics) | 重新读取动态 DPI，并同步渲染缩放与命令版本。 |
 | [`wake()`](#wake) | 从任意线程推送本窗口的 `Wake` 事件，中断事件等待。 |
 | [`ticks()`](#ticks) | SDL 初始化以来的毫秒数。 |
 | [`delay(ms: UInt32)`](#delay) | 阻塞等待指定毫秒。 |

@@ -2,7 +2,7 @@
 
 # Rect
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 逻辑像素下的轴对齐矩形——原点 `x`/`y` 加宽高 `w`/`h`，用于布局框、命中测试与裁剪。[`contains`](#contains) 将四条边都视为在内（`x` 与 `right()` 均命中），所以相邻矩形都会把共享边上的点判定为内部；[`inset`](#inset) 与 [`intersection`](#intersection) 会把负的结果宽高改为 0。
 

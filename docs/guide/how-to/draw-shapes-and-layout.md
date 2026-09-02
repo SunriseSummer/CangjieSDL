@@ -10,33 +10,13 @@
 
 ## 准备工作
 
-保留首个窗口的事件循环、`renderFrame` 和 try-with-resources，只替换绘制体内部的布局与绘制。标准 poll/wait 事件入口会自动同步窗口尺寸与 DPI；先给每个区域算出一个具名 Rect，再绘制，不要在绘制和事件代码中分别散落相同数字。
+保留首个窗口的事件循环、`renderFrame` 和 `try (...)` 资源块，只替换绘制体内部的布局与绘制。标准事件轮询和等待方法会自动同步窗口尺寸与 DPI；先为每个区域计算一个具名 `Rect`，再绘制，不要在绘制和事件代码中分别复制相同数字。
 
 ## 操作步骤
 
-在 `renderFrame` 的绘制闭包内替换原卡片绘制。外层 `shell` 随当前逻辑尺寸变化，标题栏和按钮从它派生。`pushClip/popClip` 只限制内容区，按钮在裁剪外仍完整可见。软阴影放在卡片之前，描边放在填充之后。
+在 `renderFrame` 的绘制闭包内，先由当前逻辑宽高计算外层 `shell`，再从它派生 `header`、`content` 和 `action`。绘制顺序应为：阴影、卡片渐变、标题栏、描边、标题、内容、按钮。用 `pushClip(content)` 限制内容区，完成后立即 `popClip()`，这样按钮不会继承裁剪。
 
-```cangjie role=patch
-let shell = Rect(28.0, 28.0, width - 56.0, height - 56.0)
-let header = Rect(shell.x, shell.y, shell.w, 72.0)
-let content = Rect(shell.x + 24.0, shell.y + 94.0, shell.w - 48.0, shell.h - 182.0)
-let action = Rect(shell.x + shell.w - 154.0, shell.y + shell.h - 68.0, 130.0, 44.0)
-
-renderer.fillRoundedRectSoft(shell.shift(0.0, 8.0), 22.0, Color.rgba(0, 0, 0, 100), feather: 14.0)
-renderer.fillRoundedRectGradient(shell, 22.0, Color.rgb(30, 41, 59), Color.rgb(15, 23, 42))
-renderer.fillPerCornerRoundedRect(header, Color.rgb(30, 64, 175),
-    topLeft: 22.0, topRight: 22.0, bottomRight: 0.0, bottomLeft: 0.0)
-renderer.strokeRoundedRect(shell, 22.0, Pen(width: 1.5, color: Color.rgba(148, 163, 184, 180)))
-renderer.text("任务面板", header.x + 24.0, header.y + 24.0, Color.rgb(255, 255, 255), pointSize: FontSizes.TITLE)
-
-renderer.pushClip(content)
-renderer.fillRoundedRect(content, 12.0, Color.rgba(2, 6, 23, 130))
-renderer.text("内容只在此区域内显示", content.x + 16.0, content.y + 18.0, Color.rgb(203, 213, 225))
-renderer.popClip()
-
-renderer.fillRoundedRect(action, 10.0, Color.rgb(34, 197, 94))
-renderer.textCenter("完成", action, Color.rgb(3, 25, 12), pointSize: FontSizes.CONTROL)
-```
+鼠标命中应复用绘制时的 `action.contains(x, y)`。可以把布局封装为返回具名矩形的纯函数，事件与绘制都调用它，避免两处复制坐标常量。
 
 把同一个 `action` 保存到帧状态或由共享布局函数返回，鼠标分支直接 `action.contains(x, y)`。当窗口很小时，先规定最小尺寸或在布局函数中夹住宽高，避免出现负尺寸矩形。
 
@@ -50,14 +30,7 @@ renderer.textCenter("完成", action, Color.rgb(3, 25, 12), pointSize: FontSizes
 
 ## 可以继续修改
 
-用视口把内容区当成局部坐标原点，适合列表或小型画布。这个变化不仅改颜色，还改变后续图形的坐标解释；使用后必须恢复视口。
-
-```cangjie role=variation
-renderer.setViewport(content)
-renderer.fillRoundedRect(Rect(12.0, 12.0, content.w - 24.0, 48.0), 8.0, Color.rgb(51, 65, 85))
-renderer.text("局部坐标内容", 28.0, 28.0, Color.rgb(241, 245, 249))
-renderer.resetViewport()
-```
+用 `setViewport(content)` 可把内容区设为局部坐标原点，适合列表或小型画布。之后传入的矩形和文字坐标都相对于该视口；绘制完成必须调用 `resetViewport()`，避免影响后续内容。
 
 ## 相关 API
 

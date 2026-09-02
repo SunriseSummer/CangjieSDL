@@ -2,7 +2,7 @@
 
 # WindowPosition
 
-`sdl` 包中的 public struct
+位于 `sdl` 包的公开结构体。
 
 窗口左上角在屏幕坐标系中的位置，由 [`SdlWindow.position`](SdlWindow.md#position) 返回。
 

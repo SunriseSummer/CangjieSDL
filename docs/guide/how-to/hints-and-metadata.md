@@ -14,22 +14,7 @@
 
 ## 操作步骤
 
-在首个窗口 `try (window = ...)` 之前加入下面代码。先应用元数据，再设置允许屏保和渲染垂直同步提示；立即读回可以证明值已保存，但最终后端行为仍需运行时观察。
-
-```cangjie role=patch
-var metadata = AppMetadata(
-    name: Some("SDL Guide App"),
-    version: Some("0.2.0"),
-    identifier: Some("org.example.sdlguide")
-)
-metadata.creator = Some("GuideLab")
-metadata.appType = Some(AppMetadataType.Application)
-ApplicationMetadata.apply(metadata)
-
-SdlHints.setBool(SdlHint.VideoAllowScreensaver, true)
-SdlHints.set(SdlHintSetting(SdlHint.RenderVSync, "1", priority: HintPriority.Normal))
-println("screensaver=${SdlHints.getBool(SdlHint.VideoAllowScreensaver, false)}")
-```
+在构造窗口前创建 `AppMetadata`，设置名称、版本、反向域名标识符、创建者和应用类型，再调用 `ApplicationMetadata.apply`。随后通过 `SdlHints.setBool` 允许屏保，并用 `SdlHintSetting` 设置垂直同步提示。立即读回只能证明提示值已保存，最终后端行为仍需在窗口创建后查询和观察。
 
 创建窗口后可通过 `renderer.vsync()` 查询实际渲染器状态；若明确传入 `WindowSpec.vsync`，以该构造设置和实际查询解释结果，不要只看 Hint。
 
@@ -43,17 +28,7 @@ println("screensaver=${SdlHints.getBool(SdlHint.VideoAllowScreensaver, false)}")
 
 ## 可以继续修改
 
-为开发构建设置自定义元数据属性，并在退出前只移除该属性。这个变化验证属性级生命周期，不清空其他应用身份。
-
-```cangjie role=variation
-let channel = AppMetadataProperty.CustomMetadataProperty("org.example.build-channel")
-ApplicationMetadata.set(channel, "development")
-match (ApplicationMetadata.get(channel)) {
-    case Some(value) => println("channel=${value}")
-    case None => println("channel missing")
-}
-ApplicationMetadata.remove(channel)
-```
+为开发构建创建 `AppMetadataProperty.CustomMetadataProperty("org.example.build-channel")`，写入 `"development"` 并读回，退出前只调用 `ApplicationMetadata.remove(channel)`。不要使用 `resetAll`，否则会清除同进程其他模块设置的应用身份。
 
 ## 相关 API
 

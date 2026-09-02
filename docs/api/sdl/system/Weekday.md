@@ -2,7 +2,7 @@
 
 # Weekday
 
-`sdl.system` 包中的 public enum
+位于 `sdl.system` 包的公开枚举。
 
 星期几，周日起算，由 [`Time.dayOfWeek`](Time.md#dayofweek) 与 [`DateTimeParts.dayOfWeek`](DateTimeParts.md#dayofweek) 使用。
 

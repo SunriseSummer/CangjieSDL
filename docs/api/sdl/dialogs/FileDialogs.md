@@ -2,7 +2,7 @@
 
 # FileDialogs
 
-`sdl.dialogs` 包中的 public class
+位于 `sdl.dialogs` 包的公开类。
 
 原生文件对话框的发起入口：打开文件、保存文件、选择文件夹。三个方法都立即返回 [`FileDialogRequest`](FileDialogRequest.md)，结果经原生回调异步送达——发起后继续跑事件循环并轮询请求对象。原生对话框启动或执行失败不会从发起方法抛出，而是由回调写成 `FileDialogResult.FileDialogFailed`。
 

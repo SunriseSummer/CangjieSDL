@@ -26,7 +26,7 @@
 ```cangjie verify role=complete
 package guide_examples
 
-import sdl.system.{ApplicationPaths, Time, cpuInfo, platformName, powerInfo}
+import sdl.system.{ApplicationPaths, PerformanceClock, Time, cpuInfo, platformName, powerInfo}
 
 main(): Unit {
     println("platform=${platformName()}")
@@ -48,6 +48,12 @@ main(): Unit {
         case Some(percent) => println("battery=${percent}%")
         case None => println("battery=<unknown>")
     }
+
+    let started = PerformanceClock.counter()
+    PerformanceClock.delayNanoseconds(PerformanceClock.millisecondsToNanoseconds(UInt64(5)))
+    let elapsed = PerformanceClock.counter() - started
+    let seconds = Float64(elapsed) / Float64(PerformanceClock.frequency())
+    println("delaySeconds=${seconds}")
 }
 ```
 
@@ -55,25 +61,13 @@ main(): Unit {
 
 ## 确认结果
 
-命令应以退出码 0 结束，并打印平台、逻辑核心数、系统内存、首选目录、程序目录、日期和电量七项。核心数与内存应大于零；首选目录非空；日期年份合理。
+命令应以退出码 0 结束，并打印平台、逻辑核心数、系统内存、首选目录、程序目录、日期、电量和延时测量。核心数与内存应大于零；首选目录非空；日期年份合理；延时结果应大于零并大致接近 0.005 秒，但操作系统调度可能让它更长。
 
 程序目录或电量显示“不可用/未知”是受支持的结果。验证记录应保存实际命令和可观察输出；本页没有 GUI，因此不制造无意义截图。
 
 ## 接着试一试
 
-加入性能计时，测量一次短延时的实际经过时间。它使用单调性能计数器，不受用户调整系统时钟影响；这与 `Time.currentDateTime()` 的业务时间用途不同。
-
-```cangjie role=variation
-import sdl.system.PerformanceClock
-
-let started = PerformanceClock.counter()
-PerformanceClock.delayNanoseconds(PerformanceClock.millisecondsToNanoseconds(UInt64(5)))
-let elapsed = PerformanceClock.counter() - started
-let seconds = Float64(elapsed) / Float64(PerformanceClock.frequency())
-println("delaySeconds=${seconds}")
-```
-
-确认结果大于零且大致接近 0.005 秒，但不要要求精确等于；操作系统调度会增加等待时间。这个变化为后面的帧耗时统计提供近迁移练习。
+把延时从 5ms 改为 20ms，比较两次输出。性能计数器是单调时钟，不受用户调整系统时间影响；这与 `Time.currentDateTime()` 的业务时间用途不同。不要断言结果精确等于请求值，操作系统调度会增加等待时间。
 
 ## 如果没有成功
 
