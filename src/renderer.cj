@@ -3,14 +3,8 @@ package sdl
 import std.collection.{ArrayList, HashMap}
 import sdl.text.{NativeFontFamily, NativeTextColor, NativeTextException, NativeTextMetrics, NativeTextRenderer}
 
-/*
- * Default supersampling factor. The whole frame is drawn into an offscreen target this many times
- * larger than the window in each axis, then linearly downscaled on present. That single step
- * anti-aliases every primitive — rounded corners, diagonal strokes, circles — on the GPU, with no
- * per-widget cost. 2x (4 samples per pixel) is the sweet spot for desktop UI, but it also makes every
- * frame pay for 4x the pixels; an application (or a benchmark isolating that cost) can lower it.
- */
-private let DEFAULT_SUPERSAMPLE: Int32 = 2
+/* 0 selects a physical-density-aware factor; positive requests remain exact compatibility knobs. */
+private let DEFAULT_SUPERSAMPLE_REQUEST: Int32 = 0
 
 /*
  * Cap on distinct cached rotated-text rasterizations. Rotated text is axis titles — a handful of
@@ -44,9 +38,16 @@ public class Renderer {
     private var ssTarget: CPointer<Unit> = CPointer<Unit>()
     private var ssWidth: Int32 = 0
     private var ssHeight: Int32 = 0
-    // Supersample factor per axis (1 = off). Fixed for the renderer's life.
-    private let ssFactor: Int32
+    // The request is stable; Auto may change the effective factor after a display-density move.
+    private let supersampleRequest: Int32
+    private let maxTextureSize: Int32
+    private var ssFactor: Int32
     private var ssEnabled: Bool
+    private var plannedTargetWidth: Int32 = 0
+    private var plannedTargetHeight: Int32 = 0
+    private var failedTargetWidth: Int32 = 0
+    private var failedTargetHeight: Int32 = 0
+    private var samplingStatus: RenderSamplingStatus
     // The live drawing scale (render coordinates -> target pixels), mirrored from every
     // SDL_SetRenderScale call. Geometry draws through the GPU scale; TEXT rasterizes at
     // this scale and draws 1:1 on the pixel grid instead (see `text`), because stretching
@@ -85,16 +86,24 @@ public class Renderer {
     private var pointBatchScratch: CPointer<SdlFPoint> = CPointer<SdlFPoint>()
     private var pointBatchCapacity: Int64 = 0
 
-    internal init(ptr: CPointer<Unit>, contentScale!: Float32 = 1.0, supersample!: Int32 = DEFAULT_SUPERSAMPLE) {
+    internal init(
+        ptr: CPointer<Unit>,
+        contentScale!: Float32 = 1.0,
+        supersample!: Int32 = DEFAULT_SUPERSAMPLE_REQUEST
+    ) {
         this.ptr = ptr
         this.contentScale = contentScale
-        this.ssFactor = if (supersample < Int32(1)) {
-            Int32(1)
-        } else {
-            supersample
-        }
+        this.supersampleRequest = supersample
+        this.maxTextureSize = rendererMaxTextureSize(ptr)
+        this.ssFactor = resolveSupersampleFactor(supersample, contentScale)
         this.ssEnabled = ptr.isNotNull() && this.ssFactor > Int32(1)
+        this.samplingStatus = if (this.ssFactor > Int32(1)) {
+            RenderSamplingStatus.Supersampled
+        } else {
+            RenderSamplingStatus.Direct
+        }
         this.textBackend = createTextBackend(ptr)
+        refreshOutputSampling()
     }
 
     /**
@@ -114,7 +123,7 @@ public class Renderer {
     public func recordCommands(body: () -> Unit): RenderCommandBuffer {
         ensureRenderAccess("record render commands")
         let previous = activeCommandRecorder
-        let recorder = RenderCommandRecorder(currentClip())
+        let recorder = RenderCommandRecorder(currentClipUnchecked())
         activeCommandRecorder = Some(recorder)
         try {
             body()
@@ -160,19 +169,110 @@ public class Renderer {
     internal func updateContentScale(scale: Float32): Unit {
         ensureRenderAccess("update Renderer content scale")
         let normalized = normalizedScale(scale)
-        if (contentScale.toBits() == normalized.toBits()) {
+        let contentScaleChanged = contentScale.toBits() != normalized.toBits()
+        let nextPlan = currentOutputSamplingPlan(normalized)
+        let supersampleChanged = installSamplingPlan(nextPlan)
+        if (!contentScaleChanged && !supersampleChanged) {
             return
         }
         contentScale = normalized
         advanceCommandEpoch()
-        ssWidth = 0
-        ssHeight = 0
         clearTextTextureCache()
         if (ptr.isNotNull()) {
             ensureSdl(unsafe { SDL_SetRenderScale(ptr, normalized, normalized) }, "SDL_SetRenderScale")
         }
         scaleX = normalized
         scaleY = normalized
+    }
+
+    /* Re-evaluates Auto after a resize before allocating or multiplying native dimensions. */
+    internal func updateOutputSampling(
+        outputWidth: Int32,
+        outputHeight: Int32,
+        maxTextureSizeOverride!: Int32 = 0
+    ): Unit {
+        ensureRenderAccess("update Renderer output sampling")
+        updateOutputSamplingUnchecked(outputWidth, outputHeight, maxTextureSizeOverride)
+    }
+
+    private func updateOutputSamplingUnchecked(
+        outputWidth: Int32,
+        outputHeight: Int32,
+        maxTextureSizeOverride: Int32
+    ): Unit {
+        let limit = if (maxTextureSizeOverride > Int32(0)) {
+            maxTextureSizeOverride
+        } else {
+            maxTextureSize
+        }
+        let plan = planSupersampleTarget(supersampleRequest, contentScale, outputWidth, outputHeight, limit)
+        if (installSamplingPlan(plan)) {
+            advanceCommandEpoch()
+            clearTextTextureCache()
+        }
+    }
+
+    internal func refreshOutputSampling(): Unit {
+        ensureRenderAccess("refresh Renderer output sampling")
+        if (ptr.isNull()) {
+            return
+        }
+        var outputWidth: Int32 = 0
+        var outputHeight: Int32 = 0
+        if (!unsafe { SDL_GetRenderOutputSize(ptr, inout outputWidth, inout outputHeight) }) {
+            updateOutputSamplingUnchecked(0, 0, 0)
+            return
+        }
+        updateOutputSamplingUnchecked(outputWidth, outputHeight, 0)
+    }
+
+    private func currentOutputSamplingPlan(scale: Float32): SupersampleTargetPlan {
+        if (ptr.isNull()) {
+            return SupersampleTargetPlan(resolveSupersampleFactor(supersampleRequest, scale))
+        }
+        var outputWidth: Int32 = 0
+        var outputHeight: Int32 = 0
+        if (!unsafe { SDL_GetRenderOutputSize(ptr, inout outputWidth, inout outputHeight) }) {
+            return planSupersampleTarget(supersampleRequest, scale, 0, 0, maxTextureSize)
+        }
+        planSupersampleTarget(supersampleRequest, scale, outputWidth, outputHeight, maxTextureSize)
+    }
+
+    private func installSamplingPlan(plan: SupersampleTargetPlan): Bool {
+        let factorChanged = plan.factor != ssFactor
+        let targetChanged = plan.targetWidth != plannedTargetWidth || plan.targetHeight != plannedTargetHeight
+        if (factorChanged || targetChanged) {
+            if (ssTarget.isNotNull()) {
+                unsafe { SDL_DestroyTexture(ssTarget) }
+                ssTarget = CPointer<Unit>()
+            }
+            ssWidth = 0
+            ssHeight = 0
+        }
+        if (targetChanged && (plan.targetWidth != failedTargetWidth || plan.targetHeight != failedTargetHeight)) {
+            failedTargetWidth = 0
+            failedTargetHeight = 0
+        }
+        ssFactor = plan.factor
+        plannedTargetWidth = plan.targetWidth
+        plannedTargetHeight = plan.targetHeight
+        let repeatedAllocationFailure = plan.targetWidth > Int32(0) && plan.targetWidth == failedTargetWidth &&
+            plan.targetHeight == failedTargetHeight
+        samplingStatus = if (repeatedAllocationFailure) {
+            RenderSamplingStatus.TargetAllocationFailure
+        } else if (plan.automaticBudgetLimited) {
+            RenderSamplingStatus.AutomaticPixelBudget
+        } else if (plan.textureSizeLimited) {
+            RenderSamplingStatus.TextureSizeLimit
+        } else if (plan.outputUnavailable) {
+            RenderSamplingStatus.OutputUnavailable
+        } else if (plan.factor > Int32(1)) {
+            RenderSamplingStatus.Supersampled
+        } else {
+            RenderSamplingStatus.Direct
+        }
+        ssEnabled = ptr.isNotNull() && plan.factor > Int32(1) && !repeatedAllocationFailure
+        factorChanged
     }
 
     internal func noteRenderReset(): Unit {
@@ -184,6 +284,9 @@ public class Renderer {
         ssTarget = CPointer<Unit>()
         ssWidth = 0
         ssHeight = 0
+        failedTargetWidth = 0
+        failedTargetHeight = 0
+        ssEnabled = ptr.isNotNull() && ssFactor > Int32(1)
         textTextureCache.clear()
     }
 
@@ -215,6 +318,7 @@ public class Renderer {
      * the CPU, which dominates a supersampled frame. "headless" when there is no device.
      */
     public func driverName(): String {
+        ensureRenderAccess("inspect Renderer driver")
         if (ptr.isNull()) {
             return "headless"
         }
@@ -226,9 +330,29 @@ public class Renderer {
         }
     }
 
-    /** The active supersample factor per axis (1 = off). */
+    /** The selected factor after density/budget planning; allocation status is in `renderSamplingStats`. */
     public func supersampleFactor(): Int32 {
+        ensureRenderAccess("inspect Renderer supersample factor")
         ssFactor
+    }
+
+    /** Current density/budget decision and planned RGBA8 target cost; performs no GPU query. */
+    public func renderSamplingStats(): RenderSamplingStats {
+        ensureRenderAccess("inspect Renderer sampling statistics")
+        let estimatedBytes = if (plannedTargetWidth > Int32(0) && plannedTargetHeight > Int32(0)) {
+            UInt64(plannedTargetWidth) * UInt64(plannedTargetHeight) * UInt64(4)
+        } else {
+            UInt64(0)
+        }
+        RenderSamplingStats(
+            supersampleRequest,
+            ssFactor,
+            plannedTargetWidth,
+            plannedTargetHeight,
+            estimatedBytes,
+            maxTextureSize,
+            samplingStatus
+        )
     }
 
     /**
@@ -237,6 +361,7 @@ public class Renderer {
      * it draws straight to the window. Either way the target is cleared to `clearColor`.
      */
     public func beginScene(logicalWidth: Float32, logicalHeight: Float32, clearColor: Color): Unit {
+        ensureRenderAccess("begin scene")
         rejectDuringCommandRecording("beginScene")
         // Balanced pushClip/popClip pairs leave the stack empty between frames. Clearing the
         // logical stack is not enough on its own: SDL clip state is persistent per render
@@ -247,19 +372,20 @@ public class Renderer {
         if (ptr.isNull()) {
             return
         }
+        var outW: Int32 = 0
+        var outH: Int32 = 0
+        if (!unsafe { SDL_GetRenderOutputSize(ptr, inout outW, inout outH) } || outW <= 0 || outH <= 0) {
+            updateOutputSamplingUnchecked(0, 0, 0)
+            drawDirect(clearColor)
+            return
+        }
+        updateOutputSamplingUnchecked(outW, outH, 0)
         if (!ssEnabled) {
             drawDirect(clearColor)
             return
         }
-        var outW: Int32 = 0
-        var outH: Int32 = 0
-        if (!unsafe { SDL_GetRenderOutputSize(ptr, inout outW, inout outH) } || outW <= 0 || outH <= 0) {
-            ssEnabled = false
-            drawDirect(clearColor)
-            return
-        }
-        let targetWidth = outW * ssFactor
-        let targetHeight = outH * ssFactor
+        let targetWidth = plannedTargetWidth
+        let targetHeight = plannedTargetHeight
         if (ssTarget.isNull() || targetWidth != ssWidth || targetHeight != ssHeight) {
             allocateTarget(targetWidth, targetHeight)
         }
@@ -276,7 +402,7 @@ public class Renderer {
         // The supersample target holds its own persistent clip; drop any leak before clearing,
         // or the clear itself (and everything before the first push) would stay clipped.
         resetClip()
-        clear(clearColor)
+        clearTarget(clearColor)
     }
 
     /**
@@ -291,6 +417,7 @@ public class Renderer {
         clearColor: Color,
         damage: Rect
     ): Bool {
+        ensureRenderAccess("begin damaged scene")
         rejectDuringCommandRecording("beginSceneDamage")
         clipStack.clear()
         let clipped = damage.intersection(Rect(0.0, 0.0, logicalWidth, logicalHeight))
@@ -310,19 +437,20 @@ public class Renderer {
     }
 
     private func prepareDamageTarget(logicalWidth: Float32, logicalHeight: Float32, clearColor: Color): Bool {
+        var outW: Int32 = 0
+        var outH: Int32 = 0
+        if (!unsafe { SDL_GetRenderOutputSize(ptr, inout outW, inout outH) } || outW <= 0 || outH <= 0) {
+            updateOutputSamplingUnchecked(0, 0, 0)
+            drawDirect(clearColor)
+            return false
+        }
+        updateOutputSamplingUnchecked(outW, outH, 0)
         if (!ssEnabled) {
             drawDirect(clearColor)
             return false
         }
-        var outW: Int32 = 0
-        var outH: Int32 = 0
-        if (!unsafe { SDL_GetRenderOutputSize(ptr, inout outW, inout outH) } || outW <= 0 || outH <= 0) {
-            ssEnabled = false
-            drawDirect(clearColor)
-            return false
-        }
-        let targetWidth = outW * ssFactor
-        let targetHeight = outH * ssFactor
+        let targetWidth = plannedTargetWidth
+        let targetHeight = plannedTargetHeight
         let canPreserve = ssTarget.isNotNull() && targetWidth == ssWidth && targetHeight == ssHeight
         if (!canPreserve) {
             allocateTarget(targetWidth, targetHeight)
@@ -339,7 +467,7 @@ public class Renderer {
         scaleY = sy
         resetClip()
         if (!canPreserve) {
-            clear(clearColor)
+            clearTarget(clearColor)
             return false
         }
         true
@@ -351,6 +479,7 @@ public class Renderer {
      * logical scale 1 so measurement between scenes stays cacheable.
      */
     public func endScene(): Unit {
+        ensureRenderAccess("end scene")
         rejectDuringCommandRecording("endScene")
         if (ptr.isNull()) {
             return
@@ -386,7 +515,7 @@ public class Renderer {
         scaleY = contentScale
         // Direct mode draws on the window target, whose clip persists across frames too.
         resetClip()
-        clear(clearColor)
+        clearTarget(clearColor)
     }
 
     /**
@@ -420,6 +549,9 @@ public class Renderer {
         let tex = unsafe { SDL_CreateTexture(ptr, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height) }
         if (tex.isNull()) {
             ssEnabled = false
+            failedTargetWidth = width
+            failedTargetHeight = height
+            samplingStatus = RenderSamplingStatus.TargetAllocationFailure
             return
         }
         let _ = unsafe { SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_LINEAR) } // cjcheck-ignore: ignore-result # cosmetic filter preference; the texture works with the default mode
@@ -427,13 +559,21 @@ public class Renderer {
         ssTarget = tex
         ssWidth = width
         ssHeight = height
+        failedTargetWidth = 0
+        failedTargetHeight = 0
+        samplingStatus = RenderSamplingStatus.Supersampled
     }
 
     /**
      * Throws `SdlException` when SDL rejects the renderer draw color update.
      */
     public func setColor(color: Color): Unit {
+        ensureRenderAccess("set Renderer draw color")
         rejectDuringCommandRecording("setColor")
+        applyDrawColor(color)
+    }
+
+    private func applyDrawColor(color: Color): Unit {
         // A headless renderer (null ptr, used by widget unit tests) draws nothing rather than
         // throwing, so draw() can be exercised off-screen. The geometry paths already no-op this way.
         if (ptr.isNull()) {
@@ -448,13 +588,18 @@ public class Renderer {
      * Throws `SdlException` when SDL cannot clear the current render target.
      */
     public func clear(color: Color): Unit {
+        ensureRenderAccess("clear Renderer target")
         rejectDuringCommandRecording("clear")
+        clearTarget(color)
+    }
+
+    private func clearTarget(color: Color): Unit {
         // Headless renderers no-op like every other draw entry point, so canvas or shell
         // code that clears explicitly stays testable off-screen.
         if (ptr.isNull()) {
             return
         }
-        setColor(color)
+        applyDrawColor(color)
         if (!unsafe { SDL_RenderClear(ptr) }) {
             throw SdlException("SDL_RenderClear failed: ${lastSdlError()}")
         }
@@ -466,6 +611,7 @@ public class Renderer {
      * Throws `SdlException` when SDL cannot present the frame.
      */
     public func present(): Unit {
+        ensureRenderAccess("present Renderer frame")
         rejectDuringCommandRecording("present")
         if (ptr.isNull()) {
             return // headless renderer: nothing to present
@@ -480,6 +626,7 @@ public class Renderer {
      * should keep using `captureBmp` to avoid a GPU readback in the frame loop.
      */
     public func snapshotTexture(rect: Rect): ?Texture {
+        ensureRenderAccess("snapshot Renderer target")
         rejectDuringCommandRecording("snapshotTexture")
         if (ptr.isNull() || rect.w <= 0.0 || rect.h <= 0.0) {
             return None
@@ -532,6 +679,7 @@ public class Renderer {
      * Headless: the logical scale is still recorded, so text metrics stay consistent.
      */
     public func setScale(scale: Float32): Unit {
+        ensureRenderAccess("set Renderer scale")
         rejectDuringCommandRecording("setScale")
         if (scale <= 0.0) {
             throw SdlException("Renderer scale must be greater than 0.")
@@ -549,6 +697,7 @@ public class Renderer {
      * -1 requests adaptive vsync. Throws `SdlException` when SDL rejects the mode.
      */
     public func setVSync(vsync: Int32): Unit {
+        ensureRenderAccess("set Renderer vsync")
         rejectDuringCommandRecording("setVSync")
         if (ptr.isNull()) {
             return
@@ -561,6 +710,7 @@ public class Renderer {
      * Throws `SdlException` when SDL cannot report the mode.
      */
     public func vsync(): Int32 {
+        ensureRenderAccess("inspect Renderer vsync")
         if (ptr.isNull()) {
             return 0
         }
@@ -574,6 +724,7 @@ public class Renderer {
      * (SDL_SetRenderViewport). Throws `SdlException` when SDL rejects the viewport.
      */
     public func setViewport(rect: Rect): Unit {
+        ensureRenderAccess("set Renderer viewport")
         rejectDuringCommandRecording("setViewport")
         if (ptr.isNull()) {
             return
@@ -588,6 +739,7 @@ public class Renderer {
      * Throws `SdlException` when SDL cannot reset the viewport.
      */
     public func resetViewport(): Unit {
+        ensureRenderAccess("reset Renderer viewport")
         rejectDuringCommandRecording("resetViewport")
         if (ptr.isNull()) {
             return
@@ -601,6 +753,7 @@ public class Renderer {
      * Throws `SdlException` when SDL cannot report the viewport.
      */
     public func viewport(): Rect {
+        ensureRenderAccess("inspect Renderer viewport")
         if (ptr.isNull()) {
             return Rect(0.0, 0.0, 0.0, 0.0)
         }
@@ -614,13 +767,14 @@ public class Renderer {
      * scrollports and fields clip within their ancestors. Pair every call with `popClip`.
      */
     public func pushClip(rect: Rect): Unit {
+        ensureRenderAccess("push Renderer clip")
         match (activeCommandRecorder) {
             case Some(recorder) =>
                 recorder.pushClip(rect)
                 return
             case None => ()
         }
-        let effective = match (currentClip()) {
+        let effective = match (currentClipUnchecked()) {
             case Some(top) => top.intersection(rect)
             case None => rect
         }
@@ -630,6 +784,7 @@ public class Renderer {
 
     /** Restores the clip that was active before the matching `pushClip`. */
     public func popClip(): Unit {
+        ensureRenderAccess("pop Renderer clip")
         match (activeCommandRecorder) {
             case Some(recorder) =>
                 recorder.popClip()
@@ -644,6 +799,11 @@ public class Renderer {
 
     /** The clip in effect right now, or `None` when drawing is unclipped. */
     public func currentClip(): ?Rect {
+        ensureRenderAccess("inspect Renderer clip")
+        currentClipUnchecked()
+    }
+
+    private func currentClipUnchecked(): ?Rect {
         match (activeCommandRecorder) {
             case Some(recorder) => return recorder.currentClip()
             case None => ()
@@ -659,7 +819,7 @@ public class Renderer {
         if (ptr.isNull()) {
             return
         }
-        match (currentClip()) {
+        match (currentClipUnchecked()) {
             case Some(rect) => setClip(rect)
             case None => resetClip()
         }
@@ -680,8 +840,9 @@ public class Renderer {
      */
     // Headless, the logical clip stack still answers: the top entry (or a zero rect).
     public func clipRect(): Rect {
+        ensureRenderAccess("inspect Renderer clip rectangle")
         if (ptr.isNull()) {
-            return match (currentClip()) {
+            return match (currentClipUnchecked()) {
                 case Some(rect) => rect
                 case None => Rect(0.0, 0.0, 0.0, 0.0)
             }
@@ -693,6 +854,7 @@ public class Renderer {
 
     /** Whether a clip rectangle is currently active (SDL_RenderClipEnabled; headless, a non-empty clip stack). */
     public func clipEnabled(): Bool {
+        ensureRenderAccess("inspect Renderer clip state")
         if (ptr.isNull()) {
             return !clipStack.isEmpty()
         }
@@ -704,6 +866,7 @@ public class Renderer {
      * above 1.0 brighten, below dim. Throws `SdlException` when SDL rejects the scale.
      */
     public func setColorScale(scale: Float32): Unit {
+        ensureRenderAccess("set Renderer color scale")
         rejectDuringCommandRecording("setColorScale")
         if (ptr.isNull()) {
             return
@@ -716,6 +879,7 @@ public class Renderer {
      * Throws `SdlException` when SDL cannot report the scale.
      */
     public func colorScale(): Float32 {
+        ensureRenderAccess("inspect Renderer color scale")
         if (ptr.isNull()) {
             return 1.0
         }
@@ -729,6 +893,7 @@ public class Renderer {
      * (SDL_SetRenderDrawColorFloat). Throws `SdlException` when SDL rejects the color.
      */
     public func setColorFloat(r: Float32, g: Float32, b: Float32, a: Float32): Unit {
+        ensureRenderAccess("set Renderer float draw color")
         rejectDuringCommandRecording("setColorFloat")
         if (ptr.isNull()) {
             return
@@ -749,7 +914,7 @@ public class Renderer {
         if (ptr.isNull()) {
             return
         }
-        setColor(color)
+        applyDrawColor(color)
         ensureSdl(unsafe { SDL_RenderPoint(ptr, x, y) }, "SDL_RenderPoint")
     }
 
@@ -764,7 +929,7 @@ public class Renderer {
         if (ptr.isNull()) {
             return
         }
-        setColor(color)
+        applyDrawColor(color)
         ensureSdl(unsafe { SDL_RenderLine(ptr, x1, y1, x2, y2) }, "SDL_RenderLine")
     }
 
@@ -779,7 +944,7 @@ public class Renderer {
         if (ptr.isNull()) {
             return
         }
-        setColor(color)
+        applyDrawColor(color)
         var raw = rect.toSdlFRect()
         ensureSdl(unsafe { SDL_RenderRect(ptr, inout raw) }, "SDL_RenderRect")
     }
@@ -795,7 +960,7 @@ public class Renderer {
         if (ptr.isNull()) {
             return
         }
-        setColor(color)
+        applyDrawColor(color)
         var raw = rect.toSdlFRect()
         ensureSdl(unsafe { SDL_RenderFillRect(ptr, inout raw) }, "SDL_RenderFillRect")
     }
@@ -807,7 +972,7 @@ public class Renderer {
         if (ptr.isNull() || rects.isEmpty()) {
             return
         }
-        setColor(color)
+        applyDrawColor(color)
         ensureRectBatchCapacity(rects.size)
         for (index in 0..rects.size) {
             unsafe { rectBatchScratch.write(index, rects[index].toSdlFRect()) }
@@ -819,7 +984,7 @@ public class Renderer {
         if (ptr.isNull() || rects.isEmpty()) {
             return
         }
-        setColor(color)
+        applyDrawColor(color)
         ensureRectBatchCapacity(rects.size)
         for (index in 0..rects.size) {
             unsafe { rectBatchScratch.write(index, rects[index].toSdlFRect()) }
@@ -831,7 +996,7 @@ public class Renderer {
         if (ptr.isNull() || points.isEmpty()) {
             return
         }
-        setColor(color)
+        applyDrawColor(color)
         ensurePointBatchCapacity(points.size)
         for (index in 0..points.size) {
             var point = SdlFPoint()
@@ -996,7 +1161,7 @@ public class Renderer {
      * `strokeCircle` with a unit-width pen.
      */
     public func circle(cx: Float32, cy: Float32, radius: Float32, color: Color, segments!: Int64 = 0): Unit {
-        geometry.strokeCircle(ptr, Point(cx, cy), radius, Pen(width: 1.0, color: color), segments)
+        strokeCircle(cx, cy, radius, Pen(width: 1.0, color: color), segments: segments)
     }
 
     /**
@@ -1028,6 +1193,7 @@ public class Renderer {
      * points draw nothing, and a headless renderer no-ops like every other draw call.
      */
     public func fillConvexPolygon(points: ArrayList<Point>, color: Color): Unit {
+        ensureRenderAccess("draw convex polygon")
         if (isRecordingCommands()) {
             appendRecordedCommand(RenderCommand.FillConvexPolygon(points.clone(), color))
             return
@@ -1051,6 +1217,7 @@ public class Renderer {
         texPoints: ArrayList<Point>,
         alphas!: ?ArrayList<Float32> = None
     ): Unit {
+        ensureRenderAccess("draw textured strip")
         if (isRecordingCommands()) {
             let recordedAlphas: ?ArrayList<Float32> = match (alphas) {
                 case Some(values) => Some(values.clone())
@@ -1239,6 +1406,7 @@ public class Renderer {
         style!: FontStyle = FontStyle.regular,
         font!: ?String = None
     ): Unit {
+        ensureRenderAccess("draw centered text")
         let metrics = textMetrics(text, pointSize, style, resolveFontFamily(font))
         let tx = rect.centerX() - metrics.width / 2.0
         let ty = rect.centerY() - metrics.height / 2.0
@@ -1352,16 +1520,19 @@ public class Renderer {
 
     /** Text measurements requested since the last reset — a per-frame text-cost probe. */
     public func textMeasureCount(): UInt64 {
+        ensureRenderAccess("inspect text measurement count")
         measureCount
     }
 
     /** Actual measurement computations (cache misses) since the last reset — SDL_ttf calls on a real backend. */
     public func textComputeCount(): UInt64 {
+        ensureRenderAccess("inspect text computation count")
         computeCount
     }
 
     /** Text draws issued since the last reset — each rasterizes a (cached, already-shaped) string on a real backend. */
     public func textDrawCount(): UInt64 {
+        ensureRenderAccess("inspect text draw count")
         drawTextCount
     }
 
@@ -1371,6 +1542,7 @@ public class Renderer {
      * while `textDrawCount` scales with frames, which is the shaped-text cache working.
      */
     public func textShapeCount(): UInt64 {
+        ensureRenderAccess("inspect text shaping count")
         match (textBackend) {
             case Some(value) => value.shapeCount()
             case None => 0
@@ -1379,6 +1551,7 @@ public class Renderer {
 
     /** Resets the text measurement, compute, draw, and shape counters; call at a frame boundary to sample one frame. */
     public func resetTextMeasureCount(): Unit {
+        ensureRenderAccess("reset text diagnostics")
         measureCount = 0
         computeCount = 0
         drawTextCount = 0
@@ -1441,34 +1614,30 @@ public class Renderer {
     private func textMetrics(text: String, pointSize: Float32, style: FontStyle, family: NativeFontFamily): NativeTextMetrics {
         measureCount += 1
         let flags = style.ttfFlags()
-        // Cache the unscaled path only — all layout-time measurement and unscaled draw. The scaled
-        // text-pass path (scaleX/scaleY != 1) is rare and recomputed. The cache sits above the
-        // backend/estimate split, so it serves both the real font backend (skipping SDL_ttf) and the
-        // headless estimate, and `computeCount` tracks the misses in either mode.
-        if (scaleX == 1.0 && scaleY == 1.0) {
-            // Fold the style flags (0..15) into the low bits of the size key so bold and plain runs
-            // of the same size are cached and measured apart rather than colliding. The face path
-            // selects the cache, so named fonts are kept apart without lengthening the string key.
-            let sizeKey = Int64(pointSize * Float32(256.0)) * 16 + Int64(flags)
-            let cache = metricsCacheFor(family)
-            match (cache.get(sizeKey, text)) {
-                case Some(cached) => return cached
-                case None => ()
-            }
-            computeCount += 1
-            let computed = computeMetrics(text, pointSize, style, family)
-            cache.put(sizeKey, text, computed)
-            return computed
+        // Cache the metrics in the rasterizer's physical coordinate space. Scaled text is drawn
+        // 1:1 at `pointSize * scaleY`, so this native value depends on the effective point size but
+        // not on scaleX. Mapping it back after lookup preserves non-uniform-scale semantics and lets
+        // centered controls reuse the same FreeType measurement across frames instead of missing on
+        // every draw merely because the scene scale is not 1.
+        let effectivePointSize = pointSize * scaleY
+        // Fold the style flags (0..15) into the low bits of the effective-size key so bold and plain
+        // runs are cached apart. The face path selects the cache without lengthening the string key.
+        let sizeKey = Int64(effectivePointSize * Float32(256.0)) * 16 + Int64(flags)
+        let cache = metricsCacheFor(family)
+        let nativeMetrics = match (cache.get(sizeKey, text)) {
+            case Some(cached) => cached
+            case None =>
+                computeCount += 1
+                let computed = computeMetrics(text, effectivePointSize, style, family)
+                cache.put(sizeKey, text, computed)
+                computed
         }
-        computeCount += 1
-        match (textBackend) {
-            case Some(value) =>
-                // Measure the same scaled rasterization the text pass draws, mapped back to
-                // logical units — carets, selection bands and ellipsis decisions computed
-                // from these metrics then line up with the pixels actually painted.
-                let scaled = value.measure(text, pointSize * scaleY, flags, family)
-                NativeTextMetrics(scaled.width / scaleX, scaled.height / scaleY)
-            case None => headlessMetrics(text, pointSize, style)
+        if (scaleX == 1.0 && scaleY == 1.0) {
+            nativeMetrics
+        } else {
+            // Carets, selection bands and centering decisions remain in logical units while
+            // matching the exact hinted rasterization painted by the scaled text pass.
+            NativeTextMetrics(nativeMetrics.width / scaleX, nativeMetrics.height / scaleY)
         }
     }
 
@@ -1490,7 +1659,7 @@ public class Renderer {
     // While the text pass draws with the GPU scale reset to 1:1, the active clip must be
     // re-expressed in target pixels: SDL clip rectangles live in the current scaled space.
     private func applyClipForTextPass(): Unit {
-        match (currentClip()) {
+        match (currentClipUnchecked()) {
             case Some(rect) => setClip(Rect(rect.x * scaleX, rect.y * scaleY, rect.w * scaleX, rect.h * scaleY))
             case None => ()
         }
@@ -1504,6 +1673,7 @@ public class Renderer {
      * Throws `SdlException` when SDL cannot read the pixels or save the file.
      */
     public func captureBmp(path: String): Unit {
+        ensureRenderAccess("capture Renderer bitmap")
         rejectDuringCommandRecording("captureBmp")
         if (ptr.isNull()) {
             return

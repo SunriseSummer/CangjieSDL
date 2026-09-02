@@ -13,6 +13,8 @@ foreign {
 
     func SDL_GetRevision(): CString
 
+    func SDL_GetNumberProperty(properties: UInt32, name: CString, defaultValue: Int64): Int64
+
     func SDL_PollEvent(event: CPointer<SdlEvent>): Bool
 
     func SDL_WaitEventTimeout(event: CPointer<SdlEvent>, timeoutMS: Int32): Bool

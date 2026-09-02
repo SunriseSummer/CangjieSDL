@@ -37,9 +37,9 @@ public struct WindowSpec {
     // frame period snaps to a refresh multiple (16.7/33.3/50 ms at 60 Hz), so any improvement
     // smaller than a whole refresh interval is invisible.
     public let vsync: Bool
-    // Supersample factor per axis (1 = off, 2 = default 4x-samples anti-aliasing). Higher is
-    // smoother but pays for that many times the pixels every frame; lower trades edge smoothness
-    // for fill cost. 2 suits a hardware renderer; a software renderer may want 1.
+    // Supersample factor per axis. 0 (default) selects 2x below 2 physical pixels per logical unit
+    // when its target fits the Auto pixel/hardware budget, otherwise 1x. Positive values are exact
+    // compatibility overrides and ignore the framework pixel budget.
     public let supersample: Int32
 
     public init(
@@ -50,7 +50,7 @@ public struct WindowSpec {
         highDpi!: Bool = true,
         scale!: Float32 = 1.0,
         vsync!: Bool = true,
-        supersample!: Int32 = 2
+        supersample!: Int32 = 0
     ) {
         this.title = title
         this.width = width
@@ -244,11 +244,13 @@ public class SdlWindow <: Resource {
      * when SDL cannot report the size.
      */
     public func refreshSize(): Size {
+        renderer.ensureRenderAccess("refresh SdlWindow size")
         var w: Int32 = 0
         var h: Int32 = 0
         ensureSdl(unsafe { SDL_GetWindowSize(windowPtr, inout w, inout h) }, "SDL_GetWindowSize")
         widthValue = Int32(Float32(w) / scale)
         heightValue = Int32(Float32(h) / scale)
+        renderer.refreshOutputSampling()
         Size(Float32(widthValue), Float32(heightValue))
     }
 

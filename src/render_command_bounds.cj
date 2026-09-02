@@ -47,7 +47,7 @@ private func clippedCommandBounds(renderer: Renderer, command: RenderCommand, cl
 private func mergeVisibleCommandBounds(current: ?Rect, candidate: ?Rect): ?Rect {
     match (candidate) {
         case Some(rect) where rect.w > 0.0 && rect.h > 0.0 => Some(match (current) {
-            case Some(existing) => unionCommandBounds(existing, rect)
+            case Some(existing) => unionRenderBounds(existing, rect)
             case None => rect
         })
         case _ => current
@@ -85,6 +85,7 @@ private func singleRenderCommandBounds(renderer: Renderer, command: RenderComman
         case RenderCommand.DrawTextureRotated(_, destination, _, _) =>
             let half = (destination.w + destination.h) / 2.0
             Some(Rect(destination.centerX() - half, destination.centerY() - half, half * 2.0, half * 2.0))
+        case RenderCommand.ReplaySlot(slot) => slot.paintBoundsValidated()
         case _ => None
     }
 }
@@ -121,7 +122,7 @@ private func pointListCommandBounds(points: ArrayList<Point>): ?Rect {
     Some(Rect(left, top, max(1.0, right - left), max(1.0, bottom - top)))
 }
 
-private func unionCommandBounds(left: Rect, right: Rect): Rect {
+internal func unionRenderBounds(left: Rect, right: Rect): Rect {
     let x = min(left.x, right.x)
     let y = min(left.y, right.y)
     let farX = max(left.right(), right.right())

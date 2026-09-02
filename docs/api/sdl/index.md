@@ -18,6 +18,7 @@ import sdl.*
 | [`Fonts`](Fonts.md) | 进程级注册表，把应用字体名映射到字体文件路径，类似 CSS 的 `@font-face` 表。 |
 | [`Renderer`](Renderer.md) | 窗口的二维绘制入口：绘制几何、文本和纹理，并管理视口与裁剪。 |
 | [`RenderCommandBuffer`](RenderCommandBuffer.md) | Renderer 录制的不可变值命令 display list，可校验资源/epoch 后按原 z 序透明重放。 |
+| [`RenderCommandSlot`](RenderCommandSlot.md) | 可原子替换子命令缓冲的稳定层次引用，使祖先列表无需复制子命令。 |
 | [`RenderPass`](RenderPass.md) | 异常安全的场景 begin/end 资源。 |
 | [`SdlEventPump`](SdlEventPump.md) | 多窗口应用的进程级事件队列所有者。 |
 | [`TextMeasureSession`](TextMeasureSession.md) | 为同一字符串复用 UTF-8 缓冲与字体的范围/前缀测量资源。 |
@@ -39,6 +40,7 @@ import sdl.*
 | [`Point`](Point.md) | 逻辑像素坐标系中的一个位置——布局、事件与绘制共用的坐标空间。 |
 | [`Rect`](Rect.md) | 逻辑像素下的轴对齐矩形——原点 `x`/`y` 加宽高 `w`/`h`，用于布局框、命中测试与裁剪。 |
 | [`RenderCommandBufferStats`](RenderCommandBufferStats.md) | 命令、clip、资源、估算内存与重放次数诊断。 |
+| [`RenderSamplingStats`](RenderSamplingStats.md) | 当前采样倍率、计划目标尺寸、RGBA8 字节成本与硬件边长诊断。 |
 | [`Size`](Size.md) | 逻辑像素下的宽高尺寸，用于窗口尺寸查询与布局测量的返回值。 |
 | [`SurfaceStyle`](SurfaceStyle.md) | 一块圆角面板的外观描述：填充色、边框色与宽度、圆角半径、阴影色与垂直偏移。 |
 | [`TextFitResult`](TextFitResult.md) | 文本前缀适配的逻辑宽度与 UTF-8 字节长度。 |
@@ -61,6 +63,7 @@ import sdl.*
 | [`ImageFileFormat`](ImageFileFormat.md) | `Surface` 能读写的图像文件格式。 |
 | [`Key`](Key.md) | 导航键按物理位置解码，字母/数字优先采用布局相关逻辑 keycode 的按键枚举。 |
 | [`MouseButton`](MouseButton.md) | 解码后的鼠标按键；左/中/右之外的按键以 `RawCode` 携带 SDL 的按键码到达。 |
+| [`RenderSamplingStatus`](RenderSamplingStatus.md) | Renderer 采用超采样、直接绘制或资源降级的原因。 |
 | [`TextureBlendMode`](TextureBlendMode.md) | 纹理绘制时与目标像素的混合方式，对应 SDL 的 SDL_BLENDMODE_*。 |
 | [`TextureFlip`](TextureFlip.md) | 旋转绘制纹理时的镜像方式，作为 `TextureRenderOptions` 的一项传入 `Renderer.textureRotated`。 |
 | [`UiEvent`](UiEvent.md) | 解码后的 SDL 输入事件，按到达顺序交给应用处理。 |

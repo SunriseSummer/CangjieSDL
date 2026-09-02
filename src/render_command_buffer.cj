@@ -2,11 +2,6 @@ package sdl
 
 import std.collection.ArrayList
 
-private let COMMAND_BASE_BYTES: UInt64 = UInt64(64)
-private let POINT_BYTES: UInt64 = UInt64(8)
-private let FLOAT_BYTES: UInt64 = UInt64(4)
-private let MIN_PRIMITIVE_BATCH: Int64 = 4
-
 /*
  * Value commands deliberately retain parameters and resource handles, never executable closures.
  * This keeps replay deterministic, inspectable, and independent of skipped widget object graphs.
@@ -33,6 +28,7 @@ internal enum RenderCommand {
     | DrawTextRotated(String, Float32, Float32, Float64, Color, Float32, FontStyle, ?String)
     | DrawTexture(Texture, Rect, ?Rect)
     | DrawTextureRotated(Texture, Rect, Float64, TextureRenderOptions)
+    | ReplaySlot(RenderCommandSlot)
 }
 
 /* Primitive runs are compiled once when recording finishes, never rebuilt on every replay. */
@@ -41,6 +37,7 @@ internal enum ReplayCommand {
     | FillRects(Array<Rect>, Color)
     | DrawRects(Array<Rect>, Color)
     | DrawPoints(Array<Point>, Color)
+    | SlotRun(RenderCommandSlotRun)
 }
 
 /** Stable counters describing one immutable renderer command buffer. */
@@ -77,7 +74,9 @@ public struct RenderCommandBufferStats {
 
 /**
  * An immutable, ordered display list recorded by one Renderer. Commands contain copied values and
- * explicit Texture handles; replay never re-enters the widget closures that produced them.
+ * explicit Texture handles; replay never re-enters the widget closures that produced them. Every
+ * public operation is confined to the owner Renderer's thread; recursive validation uses an
+ * already-checked internal path so hierarchy depth does not multiply ownership checks.
  */
 public class RenderCommandBuffer {
     private let owner: Renderer
@@ -86,8 +85,11 @@ public class RenderCommandBuffer {
     private let replayCommands: Array<ReplayCommand>
     private let clipCommandCount: Int64
     private let resources: Array<Texture>
+    private let slots: Array<RenderCommandSlot>
     private let estimatedBytes: UInt64
     private let bounds: ?Rect
+    private let entryClip: ?Rect
+    private let hasSlots: Bool
     private var replayCount: UInt64 = UInt64(0)
     private var batchSubmissionCount: UInt64 = UInt64(0)
     private var batchedCommandCount: UInt64 = UInt64(0)
@@ -99,8 +101,11 @@ public class RenderCommandBuffer {
         replayCommands: Array<ReplayCommand>,
         clipCommandCount: Int64,
         resources: Array<Texture>,
+        slots: Array<RenderCommandSlot>,
         estimatedBytes: UInt64,
-        bounds: ?Rect
+        bounds: ?Rect,
+        entryClip: ?Rect,
+        hasSlots: Bool
     ) {
         this.owner = owner
         this.ownerEpoch = ownerEpoch
@@ -108,12 +113,16 @@ public class RenderCommandBuffer {
         this.replayCommands = replayCommands
         this.clipCommandCount = clipCommandCount
         this.resources = resources
+        this.slots = slots
         this.estimatedBytes = estimatedBytes
         this.bounds = bounds
+        this.entryClip = entryClip
+        this.hasSlots = hasSlots
     }
 
     /** Current command, clip, resource, memory-estimate, and successful-replay counters. */
     public func stats(): RenderCommandBufferStats {
+        ensureOwnerAccess("inspect render command buffer statistics")
         RenderCommandBufferStats(
             commands.size,
             clipCommandCount,
@@ -126,9 +135,24 @@ public class RenderCommandBuffer {
         )
     }
 
+    /** Whether this buffer retains stable child scene slots instead of flattening all child commands. */
+    public func hasSceneReferences(): Bool {
+        ensureOwnerAccess("inspect render command hierarchy")
+        hasSlots
+    }
+
     /** Conservative logical-pixel union of recorded paint after clip intersection. */
     public func paintBounds(): ?Rect {
-        bounds
+        ensureOwnerAccess("inspect render command buffer bounds")
+        paintBoundsValidated()
+    }
+
+    internal func paintBoundsValidated(): ?Rect {
+        if (hasSlots) {
+            renderCommandBounds(owner, commands, entryClip)
+        } else {
+            bounds
+        }
     }
 
     /**
@@ -136,6 +160,62 @@ public class RenderCommandBuffer {
      * every captured Texture is still open.
      */
     public func isReplayable(renderer: Renderer): Bool {
+        ensureOwnerAccess("validate render command buffer")
+        isReplayableValidated(renderer)
+    }
+
+    internal func isReplayableValidated(renderer: Renderer): Bool {
+        if (!localResourcesAreReplayable(renderer)) {
+            return false
+        }
+        for (slot in slots) {
+            if (!slot.isReplayableValidated(renderer)) {
+                return false
+            }
+        }
+        true
+    }
+
+    /** Whether every child subtree intersecting `damage` can be replayed without partial drawing. */
+    public func isReplayableIntersecting(renderer: Renderer, damage: Rect): Bool {
+        ensureOwnerAccess("validate damage-intersecting render commands")
+        isReplayableIntersectingValidated(renderer, damage)
+    }
+
+    internal func isReplayableIntersectingValidated(renderer: Renderer, damage: Rect): Bool {
+        localResourcesAreReplayable(renderer) && replayCommandsAreReplayableIntersectingValidated(renderer,
+            replayCommands, damage)
+    }
+
+    /**
+     * Replays commands in their original z order. Returns false before drawing when the owner,
+     * renderer epoch, or a Texture resource is invalid. The caller's clip stack is always restored.
+     */
+    public func replay(renderer: Renderer): Bool {
+        ensureOwnerAccess("replay render commands")
+        let noCull: ?Rect = None
+        replayWithCull(renderer, noCull)
+    }
+
+    /** Replays only hierarchical child slots whose current paint bounds intersect `damage`. */
+    public func replayIntersecting(renderer: Renderer, damage: Rect): Bool {
+        ensureOwnerAccess("replay damage-intersecting render commands")
+        replayWithCull(renderer, Some(damage))
+    }
+
+    private func replayWithCull(renderer: Renderer, cull: ?Rect): Bool {
+        let replayable = match (cull) {
+            case Some(damage) => isReplayableIntersectingValidated(renderer, damage)
+            case None => isReplayableValidated(renderer)
+        }
+        if (!replayable) {
+            return false
+        }
+        replayValidated(renderer, cull)
+        true
+    }
+
+    private func localResourcesAreReplayable(renderer: Renderer): Bool {
         if (!refEq(owner, renderer) || ownerEpoch != renderer.renderCommandEpoch()) {
             return false
         }
@@ -147,32 +227,51 @@ public class RenderCommandBuffer {
         true
     }
 
-    /**
-     * Replays commands in their original z order. Returns false before drawing when the owner,
-     * renderer epoch, or a Texture resource is invalid. The caller's clip stack is always restored.
-     */
-    public func replay(renderer: Renderer): Bool {
-        if (!isReplayable(renderer)) {
-            return false
-        }
+    /* Replays a graph already validated by its root without repeating transitive checks. */
+    internal func replayValidated(renderer: Renderer, cull: ?Rect): Unit {
         if (renderer.isRecordingCommands()) {
             for (command in commands) {
                 renderer.appendRecordedCommand(command)
             }
             replayCount = nextRenderCommandEpoch(replayCount)
-            return true
+            return
         }
         let savedClips = renderer.captureCommandClipStack()
         var batchStats = ReplayBatchStats()
         try {
-            batchStats = replayCompiledCommands(renderer, replayCommands)
+            batchStats = replayCompiledCommands(renderer, replayCommands, cull)
         } finally {
             renderer.restoreCommandClipStack(savedClips)
         }
         batchSubmissionCount += batchStats.submissions
         batchedCommandCount += batchStats.commands
         replayCount = nextRenderCommandEpoch(replayCount)
-        true
+    }
+
+    /* A child slot is balanced by construction, so its validated commands can share the root save. */
+    internal func replayValidatedInline(renderer: Renderer, cull: ?Rect): Unit {
+        let batchStats = replayCompiledCommands(renderer, replayCommands, cull)
+        batchSubmissionCount += batchStats.submissions
+        batchedCommandCount += batchStats.commands
+        replayCount = nextRenderCommandEpoch(replayCount)
+    }
+
+    /* Whether this immutable buffer would create a cycle if installed into `target`. */
+    internal func referencesSlot(target: RenderCommandSlot): Bool {
+        for (slot in slots) {
+            if (sameRenderCommandSlot(slot, target) || slot.referencesSlot(target)) {
+                return true
+            }
+        }
+        false
+    }
+
+    internal func rendererOwner(): Renderer {
+        owner
+    }
+
+    internal func ensureOwnerAccess(operation: String): Unit {
+        owner.ensureRenderAccess(operation)
     }
 }
 
@@ -186,94 +285,16 @@ private struct ReplayBatchStats {
     }
 }
 
-internal class RenderCommandRecorder {
-    private let commands = ArrayList<RenderCommand>()
-    private let localClips = ArrayList<Rect>()
-    private let resources = ArrayList<Texture>()
-    private let entryClip: ?Rect
-    private var clipCommandCount: Int64 = 0
-    private var estimatedBytes: UInt64 = UInt64(0)
-
-    init(entryClip: ?Rect) {
-        this.entryClip = entryClip
-    }
-
-    func record(command: RenderCommand): Unit {
-        commands.add(command)
-        estimatedBytes += estimatedRenderCommandBytes(command)
-        match (command) {
-            case RenderCommand.DrawTexturedStrip(texture, _, _, _) => addResource(texture)
-            case RenderCommand.DrawTexture(texture, _, _) => addResource(texture)
-            case RenderCommand.DrawTextureRotated(texture, _, _, _) => addResource(texture)
-            case _ => ()
-        }
-    }
-
-    func append(command: RenderCommand): Unit {
-        match (command) {
-            case RenderCommand.PushClip(rect) => pushClip(rect)
-            case RenderCommand.PopClip => popClip()
-            case _ => record(command)
-        }
-    }
-
-    func pushClip(rect: Rect): Unit {
-        let effective = match (currentClip()) {
-            case Some(parent) => parent.intersection(rect)
-            case None => rect
-        }
-        localClips.add(effective)
-        clipCommandCount += 1
-        record(RenderCommand.PushClip(rect))
-    }
-
-    func popClip(): Unit {
-        if (localClips.isEmpty()) {
-            throw IllegalStateException("Render command recording cannot pop its caller's clip")
-        }
-        localClips.remove(at: localClips.size - 1)
-        clipCommandCount += 1
-        record(RenderCommand.PopClip)
-    }
-
-    func currentClip(): ?Rect {
-        if (!localClips.isEmpty()) {
-            Some(localClips[localClips.size - 1])
-        } else {
-            entryClip
-        }
-    }
-
-    func finish(owner: Renderer, ownerEpoch: UInt64): RenderCommandBuffer {
-        if (!localClips.isEmpty()) {
-            throw IllegalStateException("Render command recording ended with an unbalanced clip stack")
-        }
-        for (resource in resources) {
-            if (!resource.isOwnedBy(owner)) {
-                throw IllegalStateException("Render commands cannot capture a Texture from another Renderer")
-            }
-        }
-        let recorded = commands.toArray()
-        RenderCommandBuffer(owner, ownerEpoch, recorded, compileRenderCommands(recorded), clipCommandCount,
-            resources.toArray(), estimatedBytes, renderCommandBounds(owner, recorded, entryClip))
-    }
-
-    private func addResource(resource: Texture): Unit {
-        for (existing in resources) {
-            if (refEq(existing, resource)) {
-                return
-            }
-        }
-        resources.add(resource)
-    }
-}
-
-private func replayCompiledCommands(renderer: Renderer, commands: Array<ReplayCommand>): ReplayBatchStats {
+private func replayCompiledCommands(
+    renderer: Renderer,
+    commands: Array<ReplayCommand>,
+    cull: ?Rect
+): ReplayBatchStats {
     var submissions: UInt64 = 0
     var batched: UInt64 = 0
     for (command in commands) {
         match (command) {
-            case ReplayCommand.Single(value) => replayRenderCommand(renderer, value)
+            case ReplayCommand.Single(value) => replayRenderCommand(renderer, value, cull)
             case ReplayCommand.FillRects(rects, color) =>
                 renderer.fillBatch(rects, color)
                 submissions += UInt64(1)
@@ -286,136 +307,35 @@ private func replayCompiledCommands(renderer: Renderer, commands: Array<ReplayCo
                 renderer.pointBatch(points, color)
                 submissions += UInt64(1)
                 batched += UInt64(points.size)
+            case ReplayCommand.SlotRun(run) => run.replay(renderer, cull)
         }
     }
     ReplayBatchStats(submissions: submissions, commands: batched)
 }
 
-private func compileRenderCommands(commands: Array<RenderCommand>): Array<ReplayCommand> {
-    let compiled = ArrayList<ReplayCommand>()
-    var index: Int64 = 0
-    while (index < commands.size) {
-        let end = batchRunEnd(commands, index)
-        let count = end - index
-        if (count >= MIN_PRIMITIVE_BATCH) {
-            compiled.add(compilePrimitiveBatch(commands, index, end))
-            index = end
-        } else {
-            compiled.add(ReplayCommand.Single(commands[index]))
-            index += 1
-        }
-    }
-    compiled.toArray()
-}
-
-private func batchRunEnd(commands: Array<RenderCommand>, start: Int64): Int64 {
-    match (commands[start]) {
-        case RenderCommand.FillRect(_, color) => contiguousFillEnd(commands, start + 1, color)
-        case RenderCommand.DrawRect(_, color) => contiguousRectEnd(commands, start + 1, color)
-        case RenderCommand.DrawPoint(_, _, color) => contiguousPointEnd(commands, start + 1, color)
-        case _ => start + 1
-    }
-}
-
-private func contiguousFillEnd(commands: Array<RenderCommand>, start: Int64, color: Color): Int64 {
-    var end = start
-    while (end < commands.size) {
-        match (commands[end]) {
-            case RenderCommand.FillRect(_, candidate) where sameColor(color, candidate) => end += 1
-            case _ => break
-        }
-    }
-    end
-}
-
-private func contiguousRectEnd(commands: Array<RenderCommand>, start: Int64, color: Color): Int64 {
-    var end = start
-    while (end < commands.size) {
-        match (commands[end]) {
-            case RenderCommand.DrawRect(_, candidate) where sameColor(color, candidate) => end += 1
-            case _ => break
-        }
-    }
-    end
-}
-
-private func contiguousPointEnd(commands: Array<RenderCommand>, start: Int64, color: Color): Int64 {
-    var end = start
-    while (end < commands.size) {
-        match (commands[end]) {
-            case RenderCommand.DrawPoint(_, _, candidate) where sameColor(color, candidate) => end += 1
-            case _ => break
-        }
-    }
-    end
-}
-
-private func compilePrimitiveBatch(
-    commands: Array<RenderCommand>,
-    start: Int64,
-    end: Int64
-): ReplayCommand {
-    match (commands[start]) {
-        case RenderCommand.FillRect(_, color) =>
-            let rects = ArrayList<Rect>(end - start)
-            for (index in start..end) {
-                appendFillRect(commands[index], rects)
-            }
-            ReplayCommand.FillRects(rects.toArray(), color)
-        case RenderCommand.DrawRect(_, color) =>
-            let rects = ArrayList<Rect>(end - start)
-            for (index in start..end) {
-                appendDrawRect(commands[index], rects)
-            }
-            ReplayCommand.DrawRects(rects.toArray(), color)
-        case RenderCommand.DrawPoint(_, _, color) =>
-            let points = ArrayList<Point>(end - start)
-            for (index in start..end) {
-                appendDrawPoint(commands[index], points)
-            }
-            ReplayCommand.DrawPoints(points.toArray(), color)
-        case _ => ReplayCommand.Single(commands[start])
-    }
-}
-
-private func compiledBatchCount(commands: Array<ReplayCommand>): Int64 {
-    var count: Int64 = 0
+private func replayCommandsAreReplayableIntersectingValidated(
+    renderer: Renderer,
+    commands: Array<ReplayCommand>,
+    damage: Rect
+): Bool {
     for (command in commands) {
         match (command) {
-            case ReplayCommand.Single(_) => ()
-            case _ => count += 1
+            case ReplayCommand.Single(RenderCommand.ReplaySlot(slot)) =>
+                if (slot.intersectsCull(Some(damage)) && !slot.isReplayableIntersectingValidated(renderer, damage)) {
+                    return false
+                }
+            case ReplayCommand.SlotRun(run) =>
+                if (!run.isReplayableIntersecting(renderer, damage)) {
+                    return false
+                }
+            case _ => ()
         }
     }
-    count
-}
-
-private func appendFillRect(command: RenderCommand, rects: ArrayList<Rect>): Unit {
-    match (command) {
-        case RenderCommand.FillRect(rect, _) => rects.add(rect)
-        case _ => ()
-    }
-}
-
-private func appendDrawRect(command: RenderCommand, rects: ArrayList<Rect>): Unit {
-    match (command) {
-        case RenderCommand.DrawRect(rect, _) => rects.add(rect)
-        case _ => ()
-    }
-}
-
-private func appendDrawPoint(command: RenderCommand, points: ArrayList<Point>): Unit {
-    match (command) {
-        case RenderCommand.DrawPoint(x, y, _) => points.add(Point(x, y))
-        case _ => ()
-    }
-}
-
-private func sameColor(left: Color, right: Color): Bool {
-    left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a
+    true
 }
 
 // Flat value-command dispatch table; each branch performs exactly one Renderer operation.
-private func replayRenderCommand(renderer: Renderer, command: RenderCommand): Unit {
+private func replayRenderCommand(renderer: Renderer, command: RenderCommand, cull: ?Rect): Unit {
     match (command) {
         case RenderCommand.PushClip(rect) => renderer.pushClip(rect)
         case RenderCommand.PopClip => renderer.popClip()
@@ -449,29 +369,11 @@ private func replayRenderCommand(renderer: Renderer, command: RenderCommand): Un
             source: source)
         case RenderCommand.DrawTextureRotated(texture, destination, angle, options) => renderer.textureRotated(texture,
             destination, angle, options: options)
+        case RenderCommand.ReplaySlot(slot) =>
+            if (slot.intersectsCull(cull)) {
+                slot.replayValidatedInline(renderer, cull)
+            }
     }
-}
-
-private func estimatedRenderCommandBytes(command: RenderCommand): UInt64 {
-    match (command) {
-        case RenderCommand.FillConvexPolygon(points, _) => COMMAND_BASE_BYTES + UInt64(points.size) * POINT_BYTES
-        case RenderCommand.DrawTexturedStrip(_, points, texPoints, Some(alphas)) => COMMAND_BASE_BYTES +
-            UInt64(points.size + texPoints.size) * POINT_BYTES + UInt64(alphas.size) * FLOAT_BYTES
-        case RenderCommand.DrawTexturedStrip(_, points, texPoints, None) => COMMAND_BASE_BYTES +
-            UInt64(points.size + texPoints.size) * POINT_BYTES
-        case RenderCommand.DrawText(text, _, _, _, _, _, font) => COMMAND_BASE_BYTES + stringPayloadBytes(text, font)
-        case RenderCommand.DrawTextRotated(text, _, _, _, _, _, _, font) => COMMAND_BASE_BYTES + stringPayloadBytes(
-            text, font)
-        case _ => COMMAND_BASE_BYTES
-    }
-}
-
-private func stringPayloadBytes(text: String, font: ?String): UInt64 {
-    let fontBytes = match (font) {
-        case Some(value) => UInt64(value.size)
-        case None => UInt64(0)
-    }
-    UInt64(text.size) + fontBytes
 }
 
 internal func nextRenderCommandEpoch(current: UInt64): UInt64 {

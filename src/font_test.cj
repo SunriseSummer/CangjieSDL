@@ -39,6 +39,27 @@ func directRenderPassRestoresLogicalTextMetricsCacheBetweenFrames(): Unit {
 }
 
 @Test
+func scaledTextMetricsCacheNativeRasterSizeAcrossFrames(): Unit {
+    let renderer = Renderer.headless()
+    let bounds = Rect(0.0, 0.0, 160.0, 40.0)
+    let color = Color.rgb(240, 240, 240)
+
+    renderer.setScale(2.0)
+    renderer.resetTextMeasureCount()
+    renderer.textCenter("scaled cache", bounds, color)
+    renderer.textCenter("scaled cache", bounds, color)
+    @Expect(renderer.textMeasureCount(), UInt64(2))
+    @Expect(renderer.textComputeCount(), UInt64(1))
+
+    renderer.setScale(3.0)
+    renderer.textCenter("scaled cache", bounds, color)
+    @Expect(renderer.textComputeCount(), UInt64(2))
+    renderer.setScale(2.0)
+    renderer.textCenter("scaled cache", bounds, color)
+    @Expect(renderer.textComputeCount(), UInt64(2))
+}
+
+@Test
 func systemUiFontMeasuresChineseAndLatinText(): Unit {
     let window = SdlWindow(WindowSpec("Font test", 320, 120))
     try {

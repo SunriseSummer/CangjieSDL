@@ -14,7 +14,7 @@ public struct WindowSpec
 
 ## 说明
 
-`vsync` 控制渲染器 present 时是否等待垂直回扫：开（默认）避免撕裂，是真实应用的正确选择；关让帧循环不设上限地运行——基准测量真实每帧开销时用，因为 vsync 开启时每帧周期都吸附到刷新周期的整数倍，小于一个刷新间隔的改进不可见。`supersample` 是每轴超采样倍数（1 = 关，2 = 默认的 4 采样抗锯齿）：越高越平滑，但每帧要为多倍像素买单；硬件渲染器适合 2，软件渲染器可考虑 1。`scale` 非正时按 1.0 处理。
+`vsync` 控制渲染器 present 时是否等待垂直回扫：开（默认）避免撕裂，是真实应用的正确选择；关让帧循环不设上限地运行——基准测量真实每帧开销时用，因为 vsync 开启时每帧周期都吸附到刷新周期的整数倍，小于一个刷新间隔的改进不可见。`supersample` 是每轴超采样请求：默认 `0` 为 Auto，在每逻辑单位不足 2 个物理后备像素时尝试 2x，否则选择 1x；2x 目标还必须不超过 32 Mi 像素和 SDL 报告的最大纹理边长，尺寸/DPI 变化时会重新选择。正数是精确覆盖（`1` = 关闭，`2` = 4 倍像素），不受框架像素预算限制，适合质量对照与有明确画质策略的应用；算术、硬件或分配不可行时仍安全回退。负值为兼容起见按 1x 处理。`scale` 非正时按 1.0 处理。
 
 ## 示例
 
@@ -68,7 +68,7 @@ main(): Unit {
 | [`highDpi`](#highdpi) | 是否请求高像素密度后备缓冲；默认 `true`。 |
 | [`scale`](#scale) | 逻辑像素到窗口像素的缩放比；默认 1.0，非正值按 1.0 处理。 |
 | [`vsync`](#vsync) | present 是否等待垂直回扫；默认 `true`。 |
-| [`supersample`](#supersample) | 渲染器每轴超采样倍数；默认 2（4 采样抗锯齿），1 为关闭。 |
+| [`supersample`](#supersample) | 每轴超采样请求；默认 0（按物理密度 Auto），正数为精确倍数。 |
 
 ## 构造函数
 
@@ -77,7 +77,7 @@ main(): Unit {
 由标题与逻辑尺寸构造，其余项为带默认值的命名参数。
 
 ```cangjie
-public init(title: String, width: Int32, height: Int32, resizable!: Bool = true, highDpi!: Bool = true, scale!: Float32 = 1.0, vsync!: Bool = true, supersample!: Int32 = 2)
+public init(title: String, width: Int32, height: Int32, resizable!: Bool = true, highDpi!: Bool = true, scale!: Float32 = 1.0, vsync!: Bool = true, supersample!: Int32 = 0)
 ```
 
 **参数**
@@ -88,7 +88,7 @@ public init(title: String, width: Int32, height: Int32, resizable!: Bool = true,
 - `highDpi!`: `Bool` — 请求高像素密度；默认 `true`。
 - `scale!`: `Float32` — 逻辑到窗口像素的缩放比；默认 1.0，非正值按 1.0 处理。
 - `vsync!`: `Bool` — 等待垂直回扫；默认 `true`。
-- `supersample!`: `Int32` — 每轴超采样倍数；默认 2，小于 1 按 1 处理。
+- `supersample!`: `Int32` — 每轴超采样请求；默认 0 为有 32 Mi 像素预算的 Auto（物理密度 < 2 时尝试 2x，否则 1x），正数为不受框架像素预算限制的精确覆盖，负值按 1x 处理。
 
 ## 字段
 
@@ -150,7 +150,7 @@ public let vsync: Bool
 
 ### supersample
 
-渲染器每轴超采样倍数；默认 2（4 采样抗锯齿），1 为关闭。
+渲染器每轴超采样请求。默认 `0` 让渲染器按动态物理后备密度、32 Mi 像素预算和硬件纹理边长选择 1x 或 2x；正数固定请求指定倍数，`1` 为关闭。字段保存的是请求值；实际选择与资源原因由 [`Renderer.supersampleFactor`](Renderer.md#supersamplefactor) 和 [`Renderer.renderSamplingStats`](Renderer.md#rendersamplingstats) 返回。
 
 ```cangjie
 public let supersample: Int32
@@ -160,3 +160,4 @@ public let supersample: Int32
 
 - [SdlWindow](SdlWindow.md) — 消费本选项创建窗口。
 - [Renderer.supersampleFactor](Renderer.md#supersamplefactor) — 查询生效的超采样倍数。
+- [Renderer.renderSamplingStats](Renderer.md#rendersamplingstats) — 查询目标尺寸、估算显存和降级原因。

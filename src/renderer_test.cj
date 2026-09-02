@@ -1,5 +1,7 @@
 package sdl
 
+import std.collection.ArrayList
+
 @Test
 func rendererRejectsDrawingFromAnotherCangjieThread(): Unit {
     let renderer = Renderer.headless()
@@ -13,6 +15,67 @@ func rendererRejectsDrawingFromAnotherCangjieThread(): Unit {
         rejected
     }
     @Expect(worker.get())
+}
+
+@Test
+func rendererRejectsPublicStateSurfaceFromAnotherThread(): Unit {
+    let renderer = Renderer.headless()
+    let rect = Rect(0.0, 0.0, 1.0, 1.0)
+    let color = Color.rgb(0, 0, 0)
+    let pass = renderer.beginRenderPass(1.0, 1.0, color)
+    let worker = spawn {
+        => var rejected: Int64 = 0
+        if (rejectsWrongThread({=> let _ = renderer.driverName()})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.supersampleFactor()})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.renderSamplingStats()})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.beginScene(1.0, 1.0, color)})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.beginSceneDamage(1.0, 1.0, color, rect)})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.endScene()})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.setColor(color)})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.clear(color)})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.present()})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.snapshotTexture(rect)})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.setScale(1.0)})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.setVSync(0)})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.vsync()})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.setViewport(rect)})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.resetViewport()})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.viewport()})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.pushClip(rect)})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.popClip()})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.currentClip()})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.clipRect()})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.clipEnabled()})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.setColorScale(1.0)})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.colorScale()})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.setColorFloat(0.0, 0.0, 0.0, 1.0)})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.circle(0.0, 0.0, 1.0, color)})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.fillConvexPolygon(ArrayList<Point>(), color)})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.textCenter("x", rect, color)})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.textMeasureCount()})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.textComputeCount()})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.textDrawCount()})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = renderer.textShapeCount()})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.resetTextMeasureCount()})) { rejected += 1 }
+        if (rejectsWrongThread({=> renderer.captureBmp("unused.bmp")})) { rejected += 1 }
+        if (rejectsWrongThread({=> let _ = pass.isClosed()})) { rejected += 1 }
+        if (rejectsWrongThread({=> pass.close()})) { rejected += 1 }
+        rejected
+    }
+    @Expect(worker.get(), Int64(35))
+    pass.close()
+    @Expect(renderer.currentClip().isNone())
+    @Expect(renderer.textMeasureCount(), UInt64(0))
+}
+
+@Test
+func circleShorthandParticipatesInCommandRecording(): Unit {
+    let renderer = Renderer.headless()
+    let commands = renderer.recordCommands {
+        renderer.circle(4.0, 5.0, 3.0, Color.rgb(1, 2, 3))
+    }
+    @Expect(commands.stats().commandCount, Int64(1))
+    @Expect(commands.replay(renderer))
 }
 
 /*

@@ -77,6 +77,8 @@ foreign {
 
     func SDL_GetRendererName(renderer: CPointer<Unit>): CString
 
+    func SDL_GetRendererProperties(renderer: CPointer<Unit>): UInt32
+
     func SDL_CreateTexture(
         renderer: CPointer<Unit>,
         format: UInt32,

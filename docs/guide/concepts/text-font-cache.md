@@ -14,7 +14,7 @@
 
 ## 工作模型
 
-一次文字请求由四个关键参数决定：字符串、字号、`FontStyle` 和字体名或路径。度量缓存按这些条件及 `Fonts.revision()` 分开；重新注册同名字体后，现有 Renderer 会安全清理字体相关度量与旋转文字缓存。普通与粗体不会误用同一宽度；旋转文字还会缓存可复用纹理。每次 `endScene` 都恢复帧间逻辑缩放，因此高 DPI 下关闭 supersampling 也不会把下一帧布局误作缩放绘制、旁路度量缓存。`textMeasureCount` 记录度量调用，`textComputeCount` 记录真正计算次数，`textShapeCount` 与 `textDrawCount` 帮助区分重复布局和重复绘制。
+一次文字请求由四个关键参数决定：字符串、字号、`FontStyle` 和字体名或路径。度量缓存按这些条件及 `Fonts.revision()` 分开；重新注册同名字体后，现有 Renderer 会安全清理字体相关度量与旋转文字缓存。普通与粗体不会误用同一宽度；旋转文字还会缓存可复用纹理。场景缩放时缓存保存 `pointSize × scaleY` 对应的原生字体度量，再除以当前 `scaleX/scaleY` 返回逻辑结果；同一个实际栅格字号因此只计算一次，同时非均匀缩放仍按各轴正确映射。每次 `endScene` 仍恢复帧间逻辑缩放。`textMeasureCount` 记录度量调用，`textComputeCount` 记录真正计算次数，`textShapeCount` 与 `textDrawCount` 帮助区分重复布局和重复绘制。
 
 同一长字符串需要多次适配、范围测量或光标命中时，用 `textMeasureSession` 一次建立 UTF-8 原生缓冲和 shaping 结果。`fit` 给出码点安全的宽度前缀，但不代替 UAX #14 断行规则；`hitTest` 直接使用 shaping cluster，能正确处理连字和 RTL 视觉方向。不要通过不断测量从头到光标的前缀来做二分命中，这会重复 shaping，并可能把光标放进 cluster 中间。
 

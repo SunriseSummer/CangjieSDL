@@ -17,6 +17,7 @@ public class RenderPass <: Resource {
 
     /** Resolves this pass; idempotent. */
     public func close(): Unit {
+        renderer.ensureRenderAccess("close RenderPass")
         if (closed) {
             return
         }
@@ -28,6 +29,7 @@ public class RenderPass <: Resource {
      * Reports whether this pass has already resolved its scene.
      */
     public func isClosed(): Bool {
+        renderer.ensureRenderAccess("inspect RenderPass")
         closed
     }
 }
