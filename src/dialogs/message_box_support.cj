@@ -82,7 +82,9 @@ internal func ensureMessageBoxOptions(options: MessageBoxOptions): Unit {
 // Shared by the message-box and file-dialog wrappers.
 internal func parentWindowPtr(window: ?SdlWindow): CPointer<Unit> {
     match (window) {
-        case Some(parent) => parent.windowPtr
+        case Some(parent) =>
+            parent.renderer.ensureRenderAccess("use a dialog parent window")
+            parent.windowPtr
         case None => CPointer<Unit>()
     }
 }

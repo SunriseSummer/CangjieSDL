@@ -6,6 +6,8 @@
 
 SDL 窗口及其 [`Renderer`](Renderer.md) 的所有者。`width`、`height`、输入事件和绘制都使用逻辑像素；动态 DPI 信息分别记录应用缩放、窗口坐标缩放和后备像素密度，避免重复换算。构造函数初始化视频子系统并开启文字输入，失败时抛出 `SdlException`。关闭窗口会依次释放渲染资源、原生窗口和本窗口持有的视频子系统引用，不会影响仍在运行的其他窗口。
 
+SdlWindow 在建窗前自动绑定当前仓颉线程与原生线程；同一线程的多个窗口共享绑定，最后一个关闭时释放。窗口及其 Renderer 在存活期间因此保持原生线程归属；仍必须在创建它们的仓颉线程使用。窗口应从程序主线程创建。错误线程或释放后访问在进入 SDL 前抛出 `IllegalStateException`。UI 代码避免会暂停输入和绘制的阻塞式 `Future.get()`；后台任务用 `wake()` 通知并由 UI 非阻塞取回结果。`SdlWindow.wake()` 可跨线程调用，与关闭互斥，关闭后返回 false；重复 `close()` 无操作。无原生句柄的 headless Renderer 只检查仓颉线程。
+
 ## 声明
 
 ```cangjie
@@ -51,7 +53,7 @@ main(): Unit {
 
 | 成员 | 说明 |
 |---|---|
-| [`init(spec: WindowSpec)`](#init) | 按 `WindowSpec` 创建窗口与渲染器，并开启文本输入。 |
+| [`init(spec: WindowSpec, hidden!: Bool = false)`](#init) | 创建窗口与渲染器；可从创建起保持隐藏，准备首帧后再显示。 |
 
 **字段**
 
@@ -139,12 +141,33 @@ main(): Unit {
 按 [`WindowSpec`](WindowSpec.md) 创建窗口与渲染器，并开启文本输入。内部完成 `SDL_Init(VIDEO)`、窗口与渲染器创建、混合模式与 vsync 配置；任何一步失败都先释放已创建的资源再抛出。
 
 ```cangjie
-public init(spec: WindowSpec)
+public init(spec: WindowSpec, hidden!: Bool = false)
 ```
 
 **参数**
 
 - `spec`: `WindowSpec` — 标题、逻辑尺寸、缩放、vsync 与超采样等一次性选项。
+- `hidden`: `Bool` — 默认 `false` 保持既有可见行为；`true` 将隐藏标志直接传入原生创建过程，直到显式调用 `show()`。呈现本身不会自动显示窗口。
+
+需要避免启动时暴露空白或未初始化缓冲的桌面宿主，应隐藏创建，在完整的 `beginScene → 绘制 → endScene → present` 成功后再 `show()`。显示后应立即安排一次完整重绘，以应对原生窗口显示导致的后备缓冲失效。仅在构造返回后调用 `hide()` 无法消除创建阶段已经发生的闪烁。calculator、contra、thunder 示例均采用这一流程。
+
+```cangjie verify
+package docexample
+
+import sdl.{Color, SdlWindow, WindowSpec}
+
+main(): Unit {
+    try (window = SdlWindow(WindowSpec("首帧准备", 320, 180), hidden: true)) {
+        let renderer = window.renderer
+        renderer.beginScene(320.0, 180.0, Color.rgb(242, 244, 248))
+        renderer.text("Ready 仓颉", 24.0, 24.0, Color.rgb(30, 35, 45))
+        renderer.endScene()
+        renderer.present()
+        window.show()
+        // 实际应用继续事件循环，并按显示、尺寸和 DPI 事件重新完整绘制。
+    }
+}
+```
 
 **异常**
 
@@ -984,3 +1007,6 @@ public func progressValue(): Float32
 - [Renderer](Renderer.md) — 窗口的二维绘制入口。
 - [UiEvent](UiEvent.md) — `pollEvent` 返回的事件。
 - [WindowFlash](WindowFlash.md) · [WindowFlags](WindowFlags.md) · [WindowProgressState](WindowProgressState.md) — 扩展成员的参数与返回类型。
+
+
+线程绑定使用仓颉运行时 1.0.5 的已导出 ABI。运行时无法绑定（例如其它宿主已经持有绑定）时，在创建 SDL 对象前抛出 `IllegalStateException`；升级工具链需重新验收此契约。窗口关闭会先拒绝后续 wake，再在锁外销毁原生对象并释放绑定；绘图命令录制中调用 close 会先抛错，窗口保持可用。

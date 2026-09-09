@@ -32,7 +32,7 @@
 
 [![Neon Commando 示例运行效果](.images/contra.png)](contra/)
 
-这个示例用 7 个包组织 2500 多行代码。重点不是逐文件通读，而是沿一条功能链跨层阅读，例如从鼠标
+这个示例用 7 个包组织实时游戏。重点不是逐文件通读，而是沿一条功能链跨层阅读，例如从鼠标
 瞄准一直追踪到弹道、骨架、枪械和双臂绘制。
 
 ## 开始之前
@@ -71,8 +71,8 @@ Set-Location examples\calculator
 cjpm run
 ```
 
-推荐使用 `cjpm run`，项目配置会处理运行时库搜索路径。若直接启动
-`target/release/bin/main.exe`，需要先把 `SDL3.dll` 和 `SDL3_ttf.dll` 放到可执行文件目录。
+先按[运行库部署](../docs/guide/how-to/deploy-native-runtime.md)准备当前终端的搜索路径，再使用 `cjpm run`。若直接启动
+`target/release/bin/main.exe`，需要先把 `SDL3.dll`、`SDL3_ttf.dll` 和 `SDL3_image.dll` 放到可执行文件目录。
 完整方法见[部署 SDL 原生运行库](../docs/guide/how-to/deploy-native-runtime.md)。
 
 ## 三个示例共用的程序模型
@@ -131,8 +131,16 @@ python .dev\cli.py test examples --timeout 600
 
 ## 常见问题
 
-- **提示找不到 SDL DLL**：优先使用 `cjpm run`；直接运行 exe 时按上文部署两个动态库。
+- **提示找不到 SDL DLL**：优先使用 `cjpm run`；直接运行 exe 时按上文部署三个 SDL 动态库。
 - **纹理加载失败**：从对应示例目录运行程序；资源路径相对于当前工作目录解析。
 - **修改根模块后仍像旧版本**：在示例目录执行 `cjpm clean`，再重新构建。
 - **只想确认代码可编译**：执行 `cjpm build` 即可，不需要启动窗口。
 - **文字不可见或字形异常**：确认系统存在可用字体，并参阅[文本与字体](../docs/guide/how-to/text-and-fonts.md)。
+
+## 首帧显示与回归
+
+三个示例均由 `createWindow()` 隐藏创建窗口，在资源准备完成后通过 `prepareFirstFrame()` 绘制并提交完整首帧，再 `show()` 并立即完整重绘。实时游戏在这个阶段结束后才建立时间步长基准，资源加载时间不会计入第一步模拟。
+
+在任一示例目录运行 `cjpm test --no-progress`，会对直接／超采样两种路径检查真实建窗工厂和首帧函数的原生可见性。`cjpm build` 或 `cjpm run` 会使用修复后的入口。`SdlWindow` 构造默认仍保持可见；自行编写宿主时按示例显式使用 `hidden: true`。
+
+也可在仓库根目录运行 `python .dev/cli.py test examples --action all`，依次构建并执行三个示例的启动回归。默认省略 `--action` 时仍只构建，适用于没有图形桌面的环境。

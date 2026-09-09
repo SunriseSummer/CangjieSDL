@@ -42,3 +42,6 @@ import sdl.dialogs.*
 |---|---|
 | [`showSimpleMessageBox`](functions.md#showsimplemessagebox) | 弹出只有一个"确定"按钮的原生消息框，用户关闭后返回。 |
 | [`showMessageBox`](functions.md#showmessagebox) | 按 `MessageBoxOptions` 弹出自定义按钮的原生消息框，返回用户点击的按钮编号。 |
+
+
+父窗口必须仍存活，并由创建窗口的 UI／原生线程使用；传入已关闭父窗口或从错误线程使用父窗口会在分配对话框请求、调用原生 API 前抛出 `IllegalStateException`。无父窗口的异步文件对话框也应由主线程发起，遵循 [SDL 主线程要求](https://wiki.libsdl.org/SDL3/SDL_ShowOpenFileDialog)。

@@ -3,6 +3,7 @@ package sdl
 extend SdlWindow {
     /** Returns the current window title, or an empty string when SDL reports none. */
     public func title(): String {
+        renderer.ensureRenderAccess("title SdlWindow")
         let value = unsafe { SDL_GetWindowTitle(windowPtr) }
         if (value.isNull()) {
             ""
@@ -13,6 +14,7 @@ extend SdlWindow {
 
     /** Returns the window's current state flags decoded into a `WindowFlags` value. */
     public func windowFlags(): WindowFlags {
+        renderer.ensureRenderAccess("windowFlags SdlWindow")
         windowFlagsFromRaw(unsafe { SDL_GetWindowFlags(windowPtr) })
     }
 
@@ -21,6 +23,7 @@ extend SdlWindow {
      * the logical size on high-DPI displays). Throws `SdlException` on failure.
      */
     public func sizeInPixels(): Size {
+        renderer.ensureRenderAccess("sizeInPixels SdlWindow")
         var w: Int32 = 0
         var h: Int32 = 0
         ensureSdl(unsafe { SDL_GetWindowSizeInPixels(windowPtr, inout w, inout h) }, "SDL_GetWindowSizeInPixels")
@@ -32,6 +35,7 @@ extend SdlWindow {
      * bars), in window coordinates. Throws `SdlException` on failure.
      */
     public func safeArea(): Rect {
+        renderer.ensureRenderAccess("safeArea SdlWindow")
         var raw = SdlRect()
         ensureSdl(unsafe { SDL_GetWindowSafeArea(windowPtr, inout raw) }, "SDL_GetWindowSafeArea")
         rectFromSdlRect(raw)
@@ -39,6 +43,7 @@ extend SdlWindow {
 
     /** Returns the window's minimum resize limit in logical pixels. Throws `SdlException` on failure. */
     public func minimumSize(): Size {
+        renderer.ensureRenderAccess("minimumSize SdlWindow")
         var w: Int32 = 0
         var h: Int32 = 0
         ensureSdl(unsafe { SDL_GetWindowMinimumSize(windowPtr, inout w, inout h) }, "SDL_GetWindowMinimumSize")
@@ -47,6 +52,7 @@ extend SdlWindow {
 
     /** Returns the window's maximum resize limit in logical pixels. Throws `SdlException` on failure. */
     public func maximumSize(): Size {
+        renderer.ensureRenderAccess("maximumSize SdlWindow")
         var w: Int32 = 0
         var h: Int32 = 0
         ensureSdl(unsafe { SDL_GetWindowMaximumSize(windowPtr, inout w, inout h) }, "SDL_GetWindowMaximumSize")
@@ -58,6 +64,7 @@ extend SdlWindow {
      * area, in window pixels. Throws `SdlException` on failure.
      */
     public func borderSize(): WindowBorderSize {
+        renderer.ensureRenderAccess("borderSize SdlWindow")
         var top: Int32 = 0
         var left: Int32 = 0
         var bottom: Int32 = 0
@@ -74,12 +81,14 @@ extend SdlWindow {
      * rejects the call.
      */
     public func setAspectRatio(minimum: Float32, maximum: Float32): Unit {
+        renderer.ensureRenderAccess("setAspectRatio SdlWindow")
         validateWindowAspectRatio(minimum, maximum)
         ensureSdl(unsafe { SDL_SetWindowAspectRatio(windowPtr, minimum, maximum) }, "SDL_SetWindowAspectRatio")
     }
 
     /** Returns the window's current aspect ratio bounds. Throws `SdlException` on failure. */
     public func aspectRatio(): WindowAspectRatio {
+        renderer.ensureRenderAccess("aspectRatio SdlWindow")
         var minimum: Float32 = 0.0
         var maximum: Float32 = 0.0
         ensureSdl(unsafe { SDL_GetWindowAspectRatio(windowPtr, inout minimum, inout maximum) },
@@ -91,6 +100,7 @@ extend SdlWindow {
      * Throws `SdlException` when SDL cannot query the window opacity.
      */
     public func opacity(): Float32 {
+        renderer.ensureRenderAccess("opacity SdlWindow")
         let value = unsafe { SDL_GetWindowOpacity(windowPtr) }
         if (value < 0.0) {
             throw SdlException("SDL_GetWindowOpacity failed: ${lastSdlError()}")
@@ -103,6 +113,7 @@ extend SdlWindow {
      * Throws `SdlException` when SDL reports an invalid value.
      */
     public func pixelDensity(): Float32 {
+        renderer.ensureRenderAccess("pixelDensity SdlWindow")
         positiveWindowFloat(unsafe { SDL_GetWindowPixelDensity(windowPtr) }, "SDL_GetWindowPixelDensity")
     }
 
@@ -112,6 +123,7 @@ extend SdlWindow {
      * value.
      */
     public func displayScale(): Float32 {
+        renderer.ensureRenderAccess("displayScale SdlWindow")
         positiveWindowFloat(unsafe { SDL_GetWindowDisplayScale(windowPtr) }, "SDL_GetWindowDisplayScale")
     }
 
@@ -120,6 +132,7 @@ extend SdlWindow {
      * on other platforms. Throws `SdlException` on failure.
      */
     public func setFillDocument(fill: Bool): Unit {
+        renderer.ensureRenderAccess("setFillDocument SdlWindow")
         ensureSdl(unsafe { SDL_SetWindowFillDocument(windowPtr, fill) }, "SDL_SetWindowFillDocument")
     }
 
@@ -128,21 +141,25 @@ extend SdlWindow {
      * Throws `SdlException` on failure.
      */
     public func setKeyboardGrab(grabbed: Bool): Unit {
+        renderer.ensureRenderAccess("setKeyboardGrab SdlWindow")
         ensureSdl(unsafe { SDL_SetWindowKeyboardGrab(windowPtr, grabbed) }, "SDL_SetWindowKeyboardGrab")
     }
 
     /** Confines the mouse cursor to the window, or releases it. Throws `SdlException` on failure. */
     public func setMouseGrab(grabbed: Bool): Unit {
+        renderer.ensureRenderAccess("setMouseGrab SdlWindow")
         ensureSdl(unsafe { SDL_SetWindowMouseGrab(windowPtr, grabbed) }, "SDL_SetWindowMouseGrab")
     }
 
     /** Whether this window currently holds the keyboard grab. */
     public func keyboardGrabbed(): Bool {
+        renderer.ensureRenderAccess("keyboardGrabbed SdlWindow")
         unsafe { SDL_GetWindowKeyboardGrab(windowPtr) }
     }
 
     /** Whether this window currently holds the mouse grab. */
     public func mouseGrabbed(): Bool {
+        renderer.ensureRenderAccess("mouseGrabbed SdlWindow")
         unsafe { SDL_GetWindowMouseGrab(windowPtr) }
     }
 
@@ -151,6 +168,7 @@ extend SdlWindow {
      * `None` removes the confinement rectangle. Throws `SdlException` on failure.
      */
     public func setMouseGrabRect(rect: ?Rect): Unit {
+        renderer.ensureRenderAccess("setMouseGrabRect SdlWindow")
         match (rect) {
             case Some(value) =>
                 var raw = value.toSdlRect()
@@ -162,6 +180,7 @@ extend SdlWindow {
 
     /** Returns the mouse confinement rectangle, or `None` when no rectangle is set. */
     public func mouseGrabRect(): ?Rect {
+        renderer.ensureRenderAccess("mouseGrabRect SdlWindow")
         let raw = unsafe { SDL_GetWindowMouseRect(windowPtr) }
         if (raw.isNull()) {
             None
@@ -172,6 +191,7 @@ extend SdlWindow {
 
     /** Allows or forbids the window to receive input focus. Throws `SdlException` on failure. */
     public func setFocusable(focusable: Bool): Unit {
+        renderer.ensureRenderAccess("setFocusable SdlWindow")
         ensureSdl(unsafe { SDL_SetWindowFocusable(windowPtr, focusable) }, "SDL_SetWindowFocusable")
     }
 
@@ -180,6 +200,7 @@ extend SdlWindow {
      * coordinates. Throws `SdlException` on failure.
      */
     public func showSystemMenu(x: Int32, y: Int32): Unit {
+        renderer.ensureRenderAccess("showSystemMenu SdlWindow")
         ensureSdl(unsafe { SDL_ShowWindowSystemMenu(windowPtr, x, y) }, "SDL_ShowWindowSystemMenu")
     }
 
@@ -188,6 +209,7 @@ extend SdlWindow {
      * on failure.
      */
     public func setProgressState(state: WindowProgressState): Unit {
+        renderer.ensureRenderAccess("setProgressState SdlWindow")
         ensureSdl(unsafe { SDL_SetWindowProgressState(windowPtr, windowProgressStateCode(state)) },
             "SDL_SetWindowProgressState")
     }
@@ -196,6 +218,7 @@ extend SdlWindow {
      * Throws `SdlException` when SDL cannot query the native taskbar progress state.
      */
     public func progressState(): WindowProgressState {
+        renderer.ensureRenderAccess("progressState SdlWindow")
         let code = unsafe { SDL_GetWindowProgressState(windowPtr) }
         match (windowProgressStateFromCode(code)) {
             case Some(state) => state
@@ -208,6 +231,7 @@ extend SdlWindow {
      * to SDL. Throws `SdlException` on failure.
      */
     public func setProgressValue(value: Float32): Unit {
+        renderer.ensureRenderAccess("setProgressValue SdlWindow")
         ensureSdl(unsafe { SDL_SetWindowProgressValue(windowPtr, clampF32(value, 0.0, 1.0)) },
             "SDL_SetWindowProgressValue")
     }
@@ -216,6 +240,7 @@ extend SdlWindow {
      * Throws `SdlException` when SDL cannot query the native taskbar progress value.
      */
     public func progressValue(): Float32 {
+        renderer.ensureRenderAccess("progressValue SdlWindow")
         let value = unsafe { SDL_GetWindowProgressValue(windowPtr) }
         if (value < 0.0) {
             throw SdlException("SDL_GetWindowProgressValue failed: ${lastSdlError()}")

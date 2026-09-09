@@ -86,6 +86,7 @@ public static func setText(text: String): Unit
 **异常**
 
 - `SdlException` — SDL 无法更新剪贴板时。
+- `IllegalArgumentException` — 文本含 NUL 时；在调用 SDL 前拒绝，避免成功返回但内容被截断。二进制数据请用 `setData`。
 
 ### hasText
 
@@ -122,6 +123,7 @@ public static func setPrimarySelectionText(text: String): Unit
 **异常**
 
 - `SdlException` — SDL 无法更新主选择时。
+- `IllegalArgumentException` — 文本含 NUL 时，在调用 SDL 前拒绝。
 
 ### hasPrimarySelectionText
 

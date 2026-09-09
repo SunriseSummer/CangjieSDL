@@ -12,7 +12,8 @@ package docexample
 import sdl.{Color, SdlWindow, UiEvent, WindowSpec}
 
 main(): Unit {
-    try (window = SdlWindow(WindowSpec("你好，SDL", 800, 600))) {
+    try (window = SdlWindow(WindowSpec("你好，SDL", 800, 600), hidden: true)) {
+        var firstFrame = true
         var running = true
         while (running) {
             while (let Some(event) <- window.pollEvent()) {
@@ -22,11 +23,17 @@ main(): Unit {
                     case _ => ()
                 }
             }
+            if (!running) { break }
             window.renderer.renderFrame(
                 Float32(window.width),
                 Float32(window.height),
                 Color.rgb(30, 30, 46)
             ) {=> ()}
+            if (firstFrame) {
+                window.show()
+                firstFrame = false
+                continue
+            }
             window.delay(UInt32(16))
         }
     }
@@ -39,6 +46,7 @@ main(): Unit {
 |---|---|
 | 创建窗口、处理事件、绘制图形和文字、管理图片资源 | [`sdl`](sdl/index.md) |
 | 访问剪贴板、键鼠状态和系统光标 | [`sdl.input`](sdl/input/index.md) |
+| 查询 Unicode 扩展字素边界，正确选择和删除组合表情 | [`sdl.text`](sdl/text/index.md) |
 | 显示消息框或异步文件对话框 | [`sdl.dialogs`](sdl/dialogs/index.md) |
 | 查询显示器和匹配全屏模式 | [`sdl.displays`](sdl/displays/index.md) |
 | 访问路径、文件、元数据、时间、电源和平台信息 | [`sdl.system`](sdl/system/index.md) |

@@ -14,10 +14,11 @@ public class FileDialogs {
         options!: FileDialogOptions = FileDialogOptions(),
         window!: ?SdlWindow = None
     ): FileDialogRequest {
+        let parent = parentWindowPtr(window)
         let request = createFileDialogRequest(options)
         unsafe {
-            SDL_ShowOpenFileDialog(cuiFileDialogCallback, request.userdata(), parentWindowPtr(window),
-                request.rawFilters(), request.filterCount(), request.defaultLocation(), options.allowMany)
+            SDL_ShowOpenFileDialog(cuiFileDialogCallback, request.userdata(), parent, request.rawFilters(),
+                request.filterCount(), request.defaultLocation(), options.allowMany)
         }
         request
     }
@@ -29,10 +30,11 @@ public class FileDialogs {
         options!: FileDialogOptions = FileDialogOptions(),
         window!: ?SdlWindow = None
     ): FileDialogRequest {
+        let parent = parentWindowPtr(window)
         let request = createFileDialogRequest(options)
         unsafe {
-            SDL_ShowSaveFileDialog(cuiFileDialogCallback, request.userdata(), parentWindowPtr(window),
-                request.rawFilters(), request.filterCount(), request.defaultLocation())
+            SDL_ShowSaveFileDialog(cuiFileDialogCallback, request.userdata(), parent, request.rawFilters(),
+                request.filterCount(), request.defaultLocation())
         }
         request
     }
@@ -44,10 +46,11 @@ public class FileDialogs {
         options!: FileDialogOptions = FileDialogOptions(),
         window!: ?SdlWindow = None
     ): FileDialogRequest {
+        let parent = parentWindowPtr(window)
         let request = createFileDialogRequest(options)
         unsafe {
-            SDL_ShowOpenFolderDialog(cuiFileDialogCallback, request.userdata(), parentWindowPtr(window),
-                request.defaultLocation(), options.allowMany)
+            SDL_ShowOpenFolderDialog(cuiFileDialogCallback, request.userdata(), parent, request.defaultLocation(),
+                options.allowMany)
         }
         request
     }

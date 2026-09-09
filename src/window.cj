@@ -2,86 +2,6 @@ package sdl
 
 import std.sync.Mutex
 
-internal class WindowWakeEventRegistry {
-    private static let lock = Mutex()
-    private static var registeredType: UInt32 = UInt32(0)
-
-    static func eventType(): UInt32 {
-        var result: UInt32 = UInt32(0)
-        synchronized(lock) {
-            if (registeredType == UInt32(0)) {
-                // SDL3 returns zero when the finite user-event range cannot satisfy a request.
-                registeredType = unsafe { SDL_RegisterEvents(1) }
-            }
-            result = registeredType
-        }
-        result
-    }
-}
-
-/**
- * Construction-time window options: title, logical size, DPI/scale behaviour, vsync, and the
- * renderer's supersample factor. A plain value read once by `SdlWindow` (or `DesktopApp`);
- * changing a spec after creation has no effect on the window.
- */
-public struct WindowSpec {
-    public let title: String
-    public let width: Int32
-    public let height: Int32
-    public let resizable: Bool
-    public let highDpi: Bool
-    public let scale: Float32
-    // Whether the renderer waits for the vertical blank on present. On (the default) prevents
-    // tearing and is the right choice for real applications. Off lets the frame loop run
-    // uncapped, which is how a benchmark measures true per-frame work: with vsync on, every
-    // frame period snaps to a refresh multiple (16.7/33.3/50 ms at 60 Hz), so any improvement
-    // smaller than a whole refresh interval is invisible.
-    public let vsync: Bool
-    // Supersample factor per axis. 0 (default) selects 2x below 2 physical pixels per logical unit
-    // when its target fits the Auto pixel/hardware budget, otherwise 1x. Positive values are exact
-    // compatibility overrides and ignore the framework pixel budget.
-    public let supersample: Int32
-
-    public init(
-        title: String,
-        width: Int32,
-        height: Int32,
-        resizable!: Bool = true,
-        highDpi!: Bool = true,
-        scale!: Float32 = 1.0,
-        vsync!: Bool = true,
-        supersample!: Int32 = 0
-    ) {
-        this.title = title
-        this.width = width
-        this.height = height
-        this.resizable = resizable
-        this.highDpi = highDpi
-        this.scale = normalizedScale(scale)
-        this.vsync = vsync
-        this.supersample = supersample
-    }
-}
-
-/** Dynamic DPI values for one window, separating UI size from backing-store pixel density. */
-public struct WindowDisplayMetrics {
-    /** Window-coordinate units per CUI logical unit, including the application's requested zoom. */
-    public let contentScale: Float32
-    /** Backing pixels per native window-coordinate unit. */
-    public let pixelDensity: Float32
-    /** Total logical-to-backing-pixel scale used by the Renderer. */
-    public let renderScale: Float32
-    /** SDL's combined display scale before application zoom is applied. */
-    public let displayScale: Float32
-
-    public init(contentScale: Float32, pixelDensity: Float32, renderScale: Float32, displayScale: Float32) {
-        this.contentScale = contentScale
-        this.pixelDensity = pixelDensity
-        this.renderScale = renderScale
-        this.displayScale = displayScale
-    }
-}
-
 /*
  * An SDL window paired with its `Renderer`, created together and closed together. `width`/`height`
  * and every event and drawing coordinate are logical pixels; `scale` maps them to window pixels.
@@ -95,6 +15,8 @@ public class SdlWindow <: Resource {
     private let rendererPtr: CPointer<Unit>
     private var wakeEventType: UInt32 = UInt32(0)
     private var closed = false
+    private let lifecycleLock = Mutex()
+    private let threadBinding: NativeThreadBinding
 
     private var idValue: UInt32 = UInt32(0)
 
@@ -150,18 +72,21 @@ public class SdlWindow <: Resource {
 
     /**
      * Throws `SdlException` when SDL cannot create or initialize the window, renderer, or text input.
+     * `hidden: true` keeps the native window hidden from creation until an explicit `show()`;
+     * use it to prepare and present a complete first frame before exposing the window.
      */
-    public init(spec: WindowSpec) {
+    public init(spec: WindowSpec, hidden!: Bool = false) {
+        this.threadBinding = NativeThreadBinding()
         this.widthValue = spec.width
         this.heightValue = spec.height
         this.userScale = spec.scale
         this.scaleValue = spec.scale
 
-        if (!unsafe { SDL_Init(SDL_INIT_VIDEO) }) {
-            throw SdlException("SDL_Init failed: ${lastSdlError()}")
+        var flags = if (hidden) {
+            SDL_WINDOW_HIDDEN
+        } else {
+            UInt64(0)
         }
-
-        var flags = UInt64(0)
         if (spec.resizable) {
             flags = flags | SDL_WINDOW_RESIZABLE
         }
@@ -171,55 +96,68 @@ public class SdlWindow <: Resource {
 
         var window = CPointer<Unit>()
         var createdRenderer = CPointer<Unit>()
-        let titleText = unsafe { LibC.mallocCString(spec.title) }
-        try (titleResource = titleText.asResource()) {
-            let pixelWidth = scaledDimension(spec.width, spec.scale)
-            let pixelHeight = scaledDimension(spec.height, spec.scale)
-            let ok = unsafe {
-                SDL_CreateWindowAndRenderer(titleResource.value, pixelWidth, pixelHeight, flags, inout window,
-                    inout createdRenderer)
+        var videoInitialized = false
+        try {
+            if (!unsafe { SDL_Init(SDL_INIT_VIDEO) }) {
+                throw SdlException("SDL_Init failed: ${lastSdlError()}")
             }
-            if (!ok || window.isNull() || createdRenderer.isNull()) {
-                destroyCreatedResources(window, createdRenderer)
-                throw SdlException("SDL_CreateWindowAndRenderer failed: ${lastSdlError()}")
+            videoInitialized = true
+            let titleText = unsafe { LibC.mallocCString(spec.title) }
+            try (titleResource = titleText.asResource()) {
+                let pixelWidth = scaledDimension(spec.width, spec.scale)
+                let pixelHeight = scaledDimension(spec.height, spec.scale)
+                let ok = unsafe {
+                    SDL_CreateWindowAndRenderer(titleResource.value, pixelWidth, pixelHeight, flags, inout window,
+                        inout createdRenderer)
+                }
+                if (!ok || window.isNull() || createdRenderer.isNull()) {
+                    throw SdlException("SDL_CreateWindowAndRenderer failed: ${lastSdlError()}")
+                }
+                let createdWindowId = unsafe { SDL_GetWindowID(window) }
+                if (createdWindowId == UInt32(0)) {
+                    throw SdlException("SDL_GetWindowID failed: ${lastSdlError()}")
+                }
+                this.idValue = createdWindowId
+                let displayMetrics = queryWindowDisplayMetrics(window, userScale)
+                this.scaleValue = displayMetrics.contentScale
+                this.pixelDensityValue = displayMetrics.pixelDensity
+                this.displayScaleValue = displayMetrics.displayScale
+                if (floatDifference(scaleValue, spec.scale) > Float32(0.001)) {
+                    ensureSdl(unsafe {
+                        SDL_SetWindowSize(window, scaledDimension(spec.width, scaleValue),
+                            scaledDimension(spec.height, scaleValue))
+                    }, "SDL_SetWindowSize")
+                }
+                configureRenderer(createdRenderer, displayMetrics.renderScale, spec.vsync)
+                let registeredWake = WindowWakeEventRegistry.eventType()
+                if (registeredWake == UInt32(0)) {
+                    throw SdlException("SDL_RegisterEvents failed: ${lastSdlError()}")
+                }
+                this.wakeEventType = registeredWake
+                if (!unsafe { SDL_StartTextInput(window) }) {
+                    throw SdlException("SDL_StartTextInput failed: ${lastSdlError()}")
+                }
             }
-            let createdWindowId = unsafe { SDL_GetWindowID(window) }
-            if (createdWindowId == UInt32(0)) {
-                destroyCreatedResources(window, createdRenderer)
-                throw SdlException("SDL_GetWindowID failed: ${lastSdlError()}")
-            }
-            this.idValue = createdWindowId
-            let displayMetrics = queryWindowDisplayMetrics(window, userScale)
-            this.scaleValue = displayMetrics.contentScale
-            this.pixelDensityValue = displayMetrics.pixelDensity
-            this.displayScaleValue = displayMetrics.displayScale
-            if (floatDifference(scaleValue, spec.scale) > Float32(0.001)) {
-                ensureSdl(unsafe {
-                    SDL_SetWindowSize(window, scaledDimension(spec.width, scaleValue),
-                        scaledDimension(spec.height, scaleValue))
-                }, "SDL_SetWindowSize")
-            }
-            configureRenderer(window, createdRenderer, displayMetrics.renderScale, spec.vsync)
-            let registeredWake = WindowWakeEventRegistry.eventType()
-            if (registeredWake == UInt32(0)) {
-                destroyCreatedResources(window, createdRenderer)
-                throw SdlException("SDL_RegisterEvents failed: ${lastSdlError()}")
-            }
-            this.wakeEventType = registeredWake
-            if (!unsafe { SDL_StartTextInput(window) }) {
-                destroyCreatedResources(window, createdRenderer)
-                throw SdlException("SDL_StartTextInput failed: ${lastSdlError()}")
-            }
-        }
 
-        this.windowPtr = window
-        this.rendererPtr = createdRenderer
-        this.renderer = Renderer(createdRenderer, contentScale: scaleValue * pixelDensityValue,
-            supersample: spec.supersample)
+            this.windowPtr = window
+            this.rendererPtr = createdRenderer
+            this.renderer = Renderer(createdRenderer, contentScale: scaleValue * pixelDensityValue,
+                supersample: spec.supersample)
+        } catch (error: Exception) {
+            try {
+                if (videoInitialized) {
+                    destroyCreatedResources(window, createdRenderer)
+                }
+            } finally {
+                threadBinding.release()
+            }
+            throw error
+        }
     }
 
     /** Sets the window title. Throws `SdlException` when SDL cannot apply it. */
     public func setTitle(title: String): Unit {
+        renderer.ensureRenderAccess("setTitle SdlWindow")
         let cTitle = unsafe { LibC.mallocCString(title) }
         try (titleResource = cTitle.asResource()) {
             ensureSdl(unsafe { SDL_SetWindowTitle(windowPtr, titleResource.value) }, "SDL_SetWindowTitle")
@@ -231,6 +169,7 @@ public class SdlWindow <: Resource {
      * updates the cached `width`/`height`. Throws `SdlException` when SDL rejects the resize.
      */
     public func setSize(width: Int32, height: Int32): Unit {
+        renderer.ensureRenderAccess("setSize SdlWindow")
         let pixelWidth = scaledDimension(width, scale)
         let pixelHeight = scaledDimension(height, scale)
         ensureSdl(unsafe { SDL_SetWindowSize(windowPtr, pixelWidth, pixelHeight) }, "SDL_SetWindowSize")
@@ -244,6 +183,7 @@ public class SdlWindow <: Resource {
      * when SDL cannot report the size.
      */
     public func refreshSize(): Size {
+        renderer.ensureRenderAccess("refreshSize SdlWindow")
         renderer.ensureRenderAccess("refresh SdlWindow size")
         var w: Int32 = 0
         var h: Int32 = 0
@@ -256,6 +196,7 @@ public class SdlWindow <: Resource {
 
     /** Refreshes dynamic DPI values and updates the Renderer scale/epoch when they change. */
     public func refreshDisplayMetrics(): WindowDisplayMetrics {
+        renderer.ensureRenderAccess("refreshDisplayMetrics SdlWindow")
         renderer.ensureRenderAccess("refresh window display metrics")
         let metrics = queryWindowDisplayMetrics(windowPtr, userScale)
         let changed = floatDifference(scaleValue, metrics.contentScale) > Float32(0.001) ||
@@ -277,6 +218,7 @@ public class SdlWindow <: Resource {
      * caret instead of a screen corner. The conversion to window pixels happens here.
      */
     public func setTextInputArea(rect: Rect): Unit {
+        renderer.ensureRenderAccess("setTextInputArea SdlWindow")
         var raw = Rect(rect.x * scale, rect.y * scale, rect.w * scale, rect.h * scale).toSdlRect()
         ensureSdl(unsafe { SDL_SetTextInputArea(windowPtr, inout raw, 0) }, "SDL_SetTextInputArea")
     }
@@ -286,6 +228,7 @@ public class SdlWindow <: Resource {
      * returns `None` when the queue is empty. Non-blocking.
      */
     public func pollEvent(): ?UiEvent {
+        renderer.ensureRenderAccess("pollEvent SdlWindow")
         match (pollEventRecord()) {
             case Some(record) => Some(record.event)
             case None => None
@@ -294,6 +237,7 @@ public class SdlWindow <: Resource {
 
     /** Dequeues one event with its event-time window, timestamp, keycode, and modifier snapshot. */
     public func pollEventRecord(): ?UiEventRecord {
+        renderer.ensureRenderAccess("pollEventRecord SdlWindow")
         var raw = SdlEvent()
         if (!unsafe { SDL_PollEvent(inout raw) }) {
             return None
@@ -306,6 +250,7 @@ public class SdlWindow <: Resource {
      * indefinitely; zero only checks the queue. Returns `None` on timeout.
      */
     public func waitEventTimeout(timeoutMs: Int32): ?UiEvent {
+        renderer.ensureRenderAccess("waitEventTimeout SdlWindow")
         match (waitEventRecordTimeout(timeoutMs)) {
             case Some(record) => Some(record.event)
             case None => None
@@ -314,6 +259,7 @@ public class SdlWindow <: Resource {
 
     /** Waits like `waitEventTimeout` and preserves the native event metadata. */
     public func waitEventRecordTimeout(timeoutMs: Int32): ?UiEventRecord {
+        renderer.ensureRenderAccess("waitEventRecordTimeout SdlWindow")
         var raw = SdlEvent()
         if (!unsafe { SDL_WaitEventTimeout(inout raw, timeoutMs) }) {
             return None
@@ -326,6 +272,15 @@ public class SdlWindow <: Resource {
      * returns, so it is safe to call from a worker thread.
      */
     public func wake(): Bool {
+        synchronized(lifecycleLock) {
+            if (closed) {
+                return false
+            }
+            pushWake()
+        }
+    }
+
+    private func pushWake(): Bool {
         let rawPtr = unsafe { LibC.malloc<SdlEvent>() }
         var pushed = false
         try (rawResource = rawPtr.asResource()) {
@@ -403,7 +358,9 @@ public class SdlWindow <: Resource {
 
     /** Whether `close()` has already been called on this window. */
     public func isClosed(): Bool {
-        closed
+        synchronized(lifecycleLock) {
+            closed
+        }
     }
 
     /*
@@ -412,25 +369,35 @@ public class SdlWindow <: Resource {
      * reference (leaving other open windows' subsystem state intact).
      */
     public func close(): Unit {
-        if (closed) {
+        if (isClosed()) {
             return
         }
-        renderer.ensureRenderAccess("close SdlWindow")
-        closed = true
-        renderer.releaseResources()
-        if (windowPtr.isNotNull()) {
-            let _ = unsafe { SDL_StopTextInput(windowPtr) } // cjcheck-ignore: ignore-result # shutdown path is best-effort: the resource is being destroyed regardless
+        renderer.ensureWindowCloseAllowed()
+        let shouldClose = synchronized(lifecycleLock) {
+            if (closed) {
+                false
+            } else {
+                closed = true
+                true
+            }
         }
-        if (rendererPtr.isNotNull()) {
-            unsafe { SDL_DestroyRenderer(rendererPtr) }
+        if (!shouldClose) {
+            return
         }
-        if (windowPtr.isNotNull()) {
-            unsafe { SDL_DestroyWindow(windowPtr) }
+        // Once closed is published under the wake lock, all earlier wakes have completed and
+        // later wakes return false. Native teardown runs outside the lock to allow callbacks.
+        try {
+            renderer.releaseResources()
+        } finally {
+            try {
+                if (windowPtr.isNotNull()) {
+                    let _ = unsafe { SDL_StopTextInput(windowPtr) } // cjcheck-ignore: ignore-result # shutdown destroys the window even if text input was already stopped
+                }
+                destroyCreatedResources(windowPtr, rendererPtr)
+            } finally {
+                threadBinding.release()
+            }
         }
-        // Balances this window's SDL_Init. Subsystem init is ref-counted in SDL3, so with
-        // two live windows closing one must not tear down the video subsystem under the
-        // other — SDL_Quit() here would destroy every remaining window and renderer.
-        unsafe { SDL_QuitSubSystem(SDL_INIT_VIDEO) }
     }
 }
 

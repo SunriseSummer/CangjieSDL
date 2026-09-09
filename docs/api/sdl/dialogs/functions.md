@@ -41,3 +41,6 @@ public func showMessageBox(options: MessageBoxOptions, window!: ?SdlWindow = Non
 **异常**
 
 - `SdlException` — 选项非法（如按钮列表为空），或 SDL 无法显示消息框时。
+
+
+父窗口必须仍存活，并由创建窗口的 UI／原生线程使用；传入已关闭父窗口或从错误线程使用父窗口会在分配对话框请求、调用原生 API 前抛出 `IllegalStateException`。无父窗口的异步文件对话框也应由主线程发起，遵循 [SDL 主线程要求](https://wiki.libsdl.org/SDL3/SDL_ShowOpenFileDialog)。

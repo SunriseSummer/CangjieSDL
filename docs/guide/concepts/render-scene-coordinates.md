@@ -10,7 +10,7 @@
 
 同一个 420×640 计算器在 100% 与 200% 系统缩放下，应用布局都应保持 420×640 的逻辑关系，但实际像素数量可能不同。若绘制用实际像素、命中测试却用逻辑坐标，鼠标会点偏；若字体和矩形分别乘不同缩放，文字会溢出；若窗口缩放后继续把 `beginScene` 设为旧尺寸，画面会被拉伸或裁掉。
 
-`WindowSpec.scale` 是应用要求的逻辑缩放，非正值按 1 处理；`highDpi` 决定是否请求高像素密度窗口。`WindowDisplayMetrics` 分开记录四个量：`contentScale` 表示逻辑单位到窗口坐标，`pixelDensity` 表示窗口坐标到后备像素，`renderScale` 是两者乘积，`displayScale` 是尚未叠加应用缩放的 SDL 建议值。`sizeInPixels()` 返回实际像素尺寸，`width` 和 `height` 返回逻辑尺寸。
+`WindowSpec.scale` 是应用要求的逻辑缩放，非正值、NaN 和无穷值按 1 处理；`highDpi` 决定是否请求高像素密度窗口。`WindowDisplayMetrics` 分开记录四个量：`contentScale` 表示逻辑单位到窗口坐标，`pixelDensity` 表示窗口坐标到后备像素，`renderScale` 是两者乘积，`displayScale` 是尚未叠加应用缩放的 SDL 建议值。`sizeInPixels()` 返回实际像素尺寸，`width` 和 `height` 返回逻辑尺寸。
 
 ## 工作模型
 
@@ -24,13 +24,13 @@
 
 固定逻辑尺寸适合像素风游戏和简单工具；自适应桌面应用应在尺寸变化后重新计算布局。默认 `supersample = 0` 表示自动选择：物理密度低于 2 像素/逻辑单位时尝试 2 倍，否则直接绘制。自动方案还受 32 Mi 个目标像素和硬件最大纹理边长限制，避免超大窗口申请过多显存。显式正数表示固定请求，`1` 为关闭；它不受框架像素预算限制，但仍受算术、硬件和实际分配能力限制。垂直同步控制提交节奏，超采样控制内部绘制分辨率，两者用途不同。
 
-`renderer.renderSamplingStats()` 可解释当前选择：`targetWidth × targetHeight` 是计划像素数，`estimatedTargetBytes` 是 RGBA8 内存估算，`status` 给出直接绘制、预算限制、硬件限制或分配失败等原因。低分辨率图片不会因超采样获得新细节；仍应根据 `pixelDensity` 选择资源，再用逻辑矩形布局。
+`renderer.renderSamplingStats()` 可解释当前选择：`targetWidth × targetHeight` 是计划像素数，`estimatedTargetBytes` 是 RGBA8 内存估算，`status` 给出直接绘制、预算限制、硬件限制或分配失败等原因。低分辨率图片不会因超采样获得新细节；应以逻辑显示尺寸乘 `renderScale` 估算最终输出所需的图片像素；需要保留超采样中的细节时再考虑实际采样倍率。布局仍使用逻辑矩形。
 
 ## 应用这个模型
 
 标准的事件轮询和等待方法会在返回尺寸、像素大小或显示缩放事件前刷新动态尺度，下一帧再计算布局。只有直接处理原生事件时才手工调用 `refreshDisplayMetrics()`。调试时同时打印逻辑尺寸、`sizeInPixels()` 和 `WindowDisplayMetrics`：逻辑尺寸决定布局，像素尺寸描述输出，四个尺度可以发现系统 DPI 与应用缩放是否被重复计算。
 
-截图由渲染输出像素生成，尺寸应和实际渲染目标一致；视觉验收同时记录图片宽高和 SHA-256。不同设备抗锯齿细节可能不同，但文字可读、布局不裁切、交互命中一致是稳定标准。
+在 RenderPass 关闭后、`present()` 前截图，读取的是解析到窗口后的后备像素，尺寸应与 `sizeInPixels()` 一致；在场景内部截图则可能读到超采样目标。视觉验收记录图片宽高，进行基线比较时可另存 SHA-256。不同设备抗锯齿细节可能不同，但文字可读、布局不裁切、交互命中一致是稳定标准。
 
 ## 常见误解
 

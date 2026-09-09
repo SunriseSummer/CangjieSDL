@@ -64,6 +64,8 @@ SDL 事件
 
 ## 第一课：让资源生命周期一眼可见
 
+窗口工厂 `createWindow()` 使用 `hidden: true`。资源就绪后，`prepareFirstFrame()` 提交完整画面，再 `show()` 并立即重绘；游戏的时间步长基准在此后建立，资源加载时间不会计入第一步模拟。入口与 [startup_test.cj](src/startup_test.cj) 共用工厂和首帧函数。
+
 [`main.cj`](src/main.cj) 只做两件事：创建固定尺寸的 `SdlWindow`，然后调用 `runCalculator`。
 窗口位于 try-with-resources 作用域内，因此正常退出或抛出异常时都会执行 `close()`。这种写法把资源所有权
 放在装配入口，业务函数不需要猜测自己是否应释放窗口。
@@ -129,7 +131,7 @@ SDL 事件
 [`draw`](src/render.cj) 每帧执行相同顺序：开始场景、绘制背景、绘制显示面板、遍历按键、结束场景、
 提交画面。它不会为“刚刚点击了什么”保留另一套表现状态。
 
-值得重点观察三种组合能力：
+值得重点观察以下组合能力：
 
 - `fillRoundedRect`、`strokeRoundedRect` 与 `Pen` 组成按键主体和边框；
 - `fillRoundedRectSoft` 生成带羽化边缘的阴影；
@@ -168,3 +170,5 @@ SDL 事件
 
 源码修改后先运行 `cjpm build`，再运行 `cjpm run` 完成输入与视觉验收。要继续学习按帧更新、持续输入和
 实体系统，请进入 [Thunder Fighter 教程](../thunder/)。
+
+启动回归：在本例目录执行 `cjpm test --no-progress`。该测试创建原生窗口，需要桌面环境；完整交互仍按本页验收清单执行。

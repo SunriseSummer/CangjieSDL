@@ -1,37 +1,39 @@
 package sdl
 
+import std.deriving.*
+
 // How many distinct shape meshes to retain before the older generation is dropped. A UI reuses a
 // small set of shapes (a few panel/card/chip sizes, each with a fill, a border and two shadow
 // layers), so this is ample; a churning shape (an animated size) simply misses and re-tessellates
 // as before, bounded by the two-generation eviction.
 internal let MESH_CACHE_CAP: Int64 = 256
 
-// Quantizes a length to quarter-pixel units for mesh keying, TRUNCATING rather than rounding. The
-// truncation is deliberate: withinKeyBudget bounds each field with an exclusive upper limit at a
-// power of two, and floor keeps the largest in-budget value at exactly 2^bits - 1, so a boundary
-// value can never carry a bit into the adjacent packed field (rounding with +0.5 would turn, say,
-// radius 511.9 into 2048 and overflow the 11-bit radius field into `extra`). Sub-quarter-pixel size
-// differences share a mesh — an imperceptible size rounding, while the draw position stays exact.
-internal func quantizeLength(value: Float32): Int64 {
-    Int64(value * 4.0)
-}
-
-// True when a shape's dimensions fit the packed key's bit budget. An out-of-range shape bypasses the
-// cache and tessellates directly, so an extreme size can never alias onto another shape's mesh.
+// Keep the existing complexity bounds; exact keys do not remove the tessellation budget.
 internal func withinKeyBudget(w: Float32, h: Float32, radius: Float32, extra: Float32): Bool {
     w >= 0.0 && w < 8192.0 && h >= 0.0 && h < 8192.0 && radius >= 0.0 && radius < 512.0 && extra >= 0.0 && extra < 64.0
 }
 
-// Packs (kind, width, height, radius, extra) into one Int64 cache key. Field widths: kind 2 bits,
-// width/height 15 bits each (quarter-pixel, < 8192px), radius 11 bits (< 512px), extra 8 bits
-// (< 64px) — 51 bits total. withinKeyBudget bounds each length and quantizeLength truncates, so every
-// field stays at or below 2^width - 1 and distinct shapes never collide onto one key.
-internal func meshKey(kind: Int64, w: Float32, h: Float32, radius: Float32, extra: Float32): Int64 {
-    let qw = quantizeLength(w)
-    let qh = quantizeLength(h)
-    let qr = quantizeLength(radius)
-    let qe = quantizeLength(extra)
-    kind | (qw << 2) | (qh << 17) | (qr << 32) | (qe << 43)
+// A cached mesh contains the original float geometry. Its key must preserve those same
+// dimensions, otherwise the first size drawn in a quarter-pixel bucket changes later output.
+@Derive[Equatable, Hashable]
+internal struct MeshKey {
+    let kind: Int64
+    let width: UInt32
+    let height: UInt32
+    let radius: UInt32
+    let extra: UInt32
+
+    init(kind: Int64, w: Float32, h: Float32, radius: Float32, extra: Float32) {
+        this.kind = kind
+        this.width = w.toBits()
+        this.height = h.toBits()
+        this.radius = radius.toBits()
+        this.extra = extra.toBits()
+    }
+}
+
+internal func meshKey(kind: Int64, w: Float32, h: Float32, radius: Float32, extra: Float32): MeshKey {
+    MeshKey(kind, w, h, radius, extra)
 }
 
 // A tessellated shape in local coordinates, held in native buffers so per-frame emit is a tight

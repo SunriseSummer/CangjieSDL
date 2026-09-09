@@ -23,6 +23,7 @@ public class Clipboard {
      * Throws `SdlException` when SDL cannot update the system clipboard text.
      */
     public static func setText(text: String): Unit {
+        ensureClipboardText(text)
         let cText = unsafe { LibC.mallocCString(text) }
         try (textResource = cText.asResource()) {
             ensureSdl(unsafe { SDL_SetClipboardText(textResource.value) }, "SDL_SetClipboardText")
@@ -46,6 +47,7 @@ public class Clipboard {
      * Throws `SdlException` when SDL cannot update primary selection text.
      */
     public static func setPrimarySelectionText(text: String): Unit {
+        ensureClipboardText(text)
         let cText = unsafe { LibC.mallocCString(text) }
         try (textResource = cText.asResource()) {
             ensureSdl(unsafe { SDL_SetPrimarySelectionText(textResource.value) }, "SDL_SetPrimarySelectionText")
@@ -147,5 +149,13 @@ public class Clipboard {
         } finally {
             unsafe { SDL_free(CPointer<UInt8>(mimeTypes)) }
         }
+    }
+}
+
+// SDL's text clipboard API is NUL terminated; accepting embedded NUL would silently
+// truncate a successful copy and allow an editor to delete more text than it copied.
+private func ensureClipboardText(text: String): Unit {
+    if (text.contains("\u{0000}")) {
+        throw IllegalArgumentException("Clipboard text cannot contain NUL; use Clipboard.setData for binary data")
     }
 }

@@ -1,6 +1,12 @@
 package sdl
 
 @Test
+func pageNavigationKeysDecodeFromNativeScancodes(): Unit {
+    match (keyFromScancode(75)) { case Key.PageUp => @Expect(true); case _ => @Fail("PageUp was not decoded") }
+    match (keyFromScancode(78)) { case Key.PageDown => @Expect(true); case _ => @Fail("PageDown was not decoded") }
+}
+
+@Test
 func keyFromScancodeMapsLettersAndControls(): Unit {
     match (keyFromScancode(SDL_SCANCODE_A)) {
         case Key.Letter(value) => @Expect(value, UInt8(65))

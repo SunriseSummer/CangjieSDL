@@ -2,6 +2,8 @@
 
 本指南先建立窗口、事件、绘制和资源的运行模型，再按任务讲解输入、文字、图片和平台能力。精确签名、默认值和异常以 [API 参考](../api/index.md)为准。
 
+使用声明式控件开发桌面应用时，可先阅读 [CangjieGUI 学习地图](../../../CangjieGUI/docs/guide/concepts/technology-map.md)；直接控制事件循环与绘制时，按下面的路线学习。
+
 ## 入门路线
 
 1. [创建第一个窗口](getting-started/first-window.md)：运行完整程序，认识窗口、事件循环和 `renderFrame`。

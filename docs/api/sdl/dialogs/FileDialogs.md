@@ -138,3 +138,6 @@ public static func openFolder(options!: FileDialogOptions = FileDialogOptions(),
 
 - [FileDialogOptions](FileDialogOptions.md) · [FileDialogFilter](FileDialogFilter.md) — 选项类型。
 - [FileDialogRequest](FileDialogRequest.md) · [FileDialogResult](FileDialogResult.md) — 结果的轮询与读取。
+
+
+父窗口必须仍存活，并由创建窗口的 UI／原生线程使用；传入已关闭父窗口或从错误线程使用父窗口会在分配对话框请求、调用原生 API 前抛出 `IllegalStateException`。无父窗口的异步文件对话框也应由主线程发起，遵循 [SDL 主线程要求](https://wiki.libsdl.org/SDL3/SDL_ShowOpenFileDialog)。

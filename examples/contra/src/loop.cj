@@ -1,9 +1,9 @@
 package contra
+
 import contra.config.*
 import contra.model.*
 import contra.sim.*
 import contra.render.*
-
 import sdl.Key
 import sdl.MouseButton
 import sdl.SdlWindow
@@ -12,6 +12,10 @@ import sdl.clampF32
 
 func runGame(window: SdlWindow, assets: GameAssets): Unit {
     let state = GameState()
+    prepareFirstFrame(window, state, assets)
+    window.show()
+    // Showing a native window may invalidate its backbuffer; redraw before processing input.
+    draw(window.renderer, state, assets)
     var lastTicks = window.ticks()
 
     while (state.isRunning) {
@@ -116,4 +120,9 @@ func setMousePosition(state: GameState, x: Float32, y: Float32): Unit {
 func setMouseFire(state: GameState, x: Float32, y: Float32, isDown: Bool): Unit {
     setMousePosition(state, x, y)
     state.input.isMouseFireHeld = isDown
+}
+
+// Keep resource preparation and the first complete presentation inside the hidden phase.
+func prepareFirstFrame(window: SdlWindow, state: GameState, assets: GameAssets): Unit {
+    draw(window.renderer, state, assets)
 }

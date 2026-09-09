@@ -66,6 +66,8 @@ cjpm run
 
 ## 第一课：正确理解 `dt`
 
+窗口工厂 `createWindow()` 使用 `hidden: true`。资源就绪后，`prepareFirstFrame()` 提交完整画面，再 `show()` 并立即重绘；游戏的时间步长基准在此后建立，资源加载时间不会计入第一步模拟。入口与 [startup_test.cj](src/startup_test.cj) 共用工厂和首帧函数。
+
 [`runGame`](src/loop.cj) 通过两次 `window.ticks()` 的差值计算本帧经过的毫秒数，再除以 1000 得到秒。
 移动遵循同一个公式：
 
@@ -176,3 +178,5 @@ cjpm run
 
 源码修改后先执行 `cjpm build`，再运行游戏完成输入和视觉验收。要继续学习多包分层、纹理资源、世界坐标与
 骨骼动画，请进入 [Neon Commando 教程](../contra/)。
+
+启动回归：在本例目录执行 `cjpm test --no-progress`。该测试创建原生窗口，需要桌面环境；完整交互仍按本页验收清单执行。

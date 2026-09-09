@@ -4,31 +4,38 @@
 
 本页从一个真正的空目录开始，创建 `cjpm.toml` 和 `src/main.cj`，最后显示一个 720×480 的窗口。窗口中有标题、说明文字、圆角卡片和状态圆点；拖动边框改变尺寸后，卡片仍按当前逻辑尺寸绘制；点击关闭按钮后程序释放渲染器和窗口并回到终端。完整程序没有省略包声明、导入、`main`、事件循环或关闭边界。
 
-## 开始之前
+## 准备项目
 
-确认 `cjpm --version` 能运行，并知道本仓库 `sdl` 目录相对示例项目的位置。Windows 启动时还要能加载 `sdl/.sdl3/SDL3.dll` 与 `SDL3_ttf.dll`。建议在普通桌面会话中完成第一次运行；远程无显示终端适合后面的无窗口逻辑测试，不适合验证真实窗口。预计创建文件和首次构建约十分钟，人工观察与缩放约五分钟。
-
-项目最初只有这两个文件：
+安装仓颉 SDK 1.0.5，并确认 `cjpm --version` 可运行。以下布局中，仓库目录名是 `CangjieSDL`，包名是 `sdl`：
 
 ```text
-hello_sdl/
-├─ cjpm.toml
-└─ src/
-   └─ main.cj
+workspace/
+├─ CangjieSDL/
+└─ hello_sdl/
 ```
 
-`cjpm.toml` 使用可执行输出，并以本地路径依赖 SDL。把 `../sdl` 换成你机器上的真实相对路径，不要把库源码复制进应用：
+在 `workspace` 中创建应用：
+
+```text
+cjpm init --name guide_examples --type=executable --path hello_sdl
+cd hello_sdl
+```
+
+在生成的 `cjpm.toml` 中添加依赖，保留 `[package]` 配置：
 
 ```toml
-[package]
-cjc-version = "1.0.5"
-name = "guide_examples"
-version = "0.1.0"
-output-type = "executable"
-
 [dependencies]
-sdl = { path = "../sdl" }
+sdl = { path = "../CangjieSDL" }
 ```
+
+Windows x64 在应用目录执行以下 PowerShell 命令，让当前会话找到三个运行库：
+
+```powershell
+$sdlRuntime = (Resolve-Path ../CangjieSDL/.sdl3).Path
+$env:PATH = "$sdlRuntime;$env:PATH"
+```
+
+确认目录中有 `SDL3.dll`、`SDL3_ttf.dll`、`SDL3_image.dll`。其他平台需要匹配系统与架构的库，见[运行库部署](../how-to/deploy-native-runtime.md)。第一次运行应在可创建窗口的桌面会话完成。
 
 ## 先建立一个模型
 
@@ -36,9 +43,9 @@ sdl = { path = "../sdl" }
 
 ## 操作步骤
 
-1. 建立上述目录和 `cjpm.toml`，先运行 `cjpm build`，确认依赖路径正确。
+1. 完成项目创建、依赖配置与运行库准备。
 2. 把下面完整程序保存为 `src/main.cj`。标准事件入口在返回 `WindowResized`/DPI 事件前自动刷新窗口快照；绘制时每帧读取 `window.width` 与 `window.height`，因此不是只在启动时计算一次。
-3. 运行 `cjpm run`。看到窗口后拖动右下角，确认背景和卡片继续完整显示。
+3. 先执行 `cjpm build`，通过后运行 `cjpm run`。看到窗口后拖动右下角，确认背景和卡片继续完整显示。
 4. 点击窗口关闭按钮。只有进程返回且退出码为 0，首个生命周期闭环才完成。
 
 ## 完整程序
@@ -49,7 +56,8 @@ package guide_examples
 import sdl.{Color, FontSizes, Pen, Rect, SdlWindow, UiEvent, WindowSpec}
 
 main(): Unit {
-    try (window = SdlWindow(WindowSpec("SDL 首个窗口", 720, 480))) {
+    try (window = SdlWindow(WindowSpec("SDL 首个窗口", 720, 480), hidden: true)) {
+        var firstFrame = true
         var running = true
         while (running) {
             var current = window.pollEvent()
@@ -61,6 +69,8 @@ main(): Unit {
                 }
                 current = window.pollEvent()
             }
+
+            if (!running) { break }
 
             let width = Float32(window.width)
             let height = Float32(window.height)
@@ -95,11 +105,18 @@ main(): Unit {
                 renderer.fillCircle(76.0, height - 82.0, 8.0, Color.rgb(74, 222, 128))
                 renderer.text("事件循环正在运行", 96.0, height - 94.0, Color.rgb(220, 252, 231))
             }
+            if (firstFrame) {
+                window.show()
+                firstFrame = false
+                continue // 立即进入下一次完整绘制，不在首帧显示后延迟
+            }
             window.delay(UInt32(8))
         }
     }
 }
 ```
+
+窗口以 `hidden: true` 创建，首帧提交后调用 `show()`，下一轮立即重绘以恢复可能失效的后备缓冲。
 
 这个程序只在一个地方拥有窗口，也只通过 `window.renderer` 取得渲染器。`UiEvent.Quit` 只改变循环状态，不在事件分支中手动释放资源；退出 `while` 后由资源块统一关闭。
 
@@ -107,7 +124,7 @@ main(): Unit {
 
 ![首个 SDL 窗口的真实运行截图：渐变卡片、中文标题、状态点和系统标题栏均清晰可见](../_snapshots/first-window.png)
 
-先看终端：`cjpm build` 和 `cjpm run` 启动阶段没有依赖或 DLL 错误。再看窗口：深色背景上应出现蓝青渐变卡片、白色标题、浅色说明和绿色状态点；卡片边缘没有明显锯齿，中文没有方框。拖大窗口后卡片宽高随之改变，底部状态点仍在窗口内。最后关闭窗口，终端应恢复提示符，进程退出码为 0。验证流程保存了该完整程序的真实窗口截图、像素尺寸与 SHA-256，而不是只记录编译成功。
+先看终端：`cjpm build` 和 `cjpm run` 启动阶段没有依赖或 DLL 错误。再看窗口：深色背景上应出现蓝青渐变卡片、白色标题、浅色说明和绿色状态点；卡片边缘没有明显锯齿，中文没有方框。拖大窗口后卡片宽高随之改变，底部状态点仍在窗口内。最后关闭窗口，终端应恢复提示符，进程退出码为 0。上图是参考画面；字体和边缘细节可能随平台、字体与渲染后端变化，应以本机运行结果验收。
 
 ## 接着试一试
 

@@ -42,3 +42,5 @@ main(): Unit {
 
 - [imageFormatFromPath](functions.md#imageformatfrompath) — 按扩展名推断格式。
 - [Surface.load](Surface.md#load) — 按推断格式加载图像。
+
+此枚举保留为 BMP/PNG 显式加载的兼容类型；它不表示 Surface.load 的完整格式集合。通用加载由 SDL_image 内容探测决定。

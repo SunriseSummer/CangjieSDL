@@ -19,22 +19,6 @@ public func clampF32(value: Float32, low: Float32, high: Float32): Float32
 
 **返回值** `Float32` — 落在区间内的值。
 
-### drawIcon
-
-在给定矩形内以圆头粗描边绘制一枚内置矢量图标。图标定义在 24 单位网格上；描边宽度与图标尺寸成比例（大图标不退化为细线，小图标不糊成一团），`weight` 是其下限。
-
-```cangjie
-public func drawIcon(r: Renderer, icon: IconName, rect: Rect, color: Color, weight!: Float32 = 1.6): Unit
-```
-
-**参数**
-
-- `r`: `Renderer` — 绘制目标；无头渲染器为空操作。
-- `icon`: `IconName` — 图标名称。
-- `rect`: `Rect` — 图标区域，逻辑像素。
-- `color`: `Color` — 描边颜色。
-- `weight!`: `Float32` — 描边宽度下限，设备无关像素；默认 `1.6`。
-
 ### imageFormatFromPath
 
 按扩展名推断图像文件格式：`.png` / `.PNG` 为 PNG，其余一律为 BMP。
@@ -68,3 +52,11 @@ public func sdlRevision(): String
 ```
 
 **返回值** `String` — 修订标识，例如发布 tag 或提交号。
+
+### imageVersion
+
+返回运行时 SDL_image 版本，编码为 major × 1000000 + minor × 1000 + patch。
+
+```cangjie
+public func imageVersion(): Int32
+```

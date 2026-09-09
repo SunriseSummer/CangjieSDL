@@ -23,6 +23,32 @@ foreign {
 
     func TTF_OpenFont(file: CString, pointSize: Float32): CPointer<Unit>
 
+    func TTF_OpenFontWithProperties(props: UInt32): CPointer<Unit>
+
+    func SDL_CreateProperties(): UInt32
+
+    func SDL_DestroyProperties(props: UInt32): Unit
+
+    func SDL_SetStringProperty(props: UInt32, name: CString, value: CString): Bool
+
+    func SDL_SetNumberProperty(props: UInt32, name: CString, value: Int64): Bool
+
+    func SDL_SetFloatProperty(props: UInt32, name: CString, value: Float32): Bool
+
+    func TTF_GetFontStyle(font: CPointer<Unit>): Int32
+
+    func TTF_GetNumFontFaces(font: CPointer<Unit>): Int32
+
+    func TTF_GetFontStyleName(font: CPointer<Unit>): CString
+
+    func TTF_GetFontAscent(font: CPointer<Unit>): Int32
+
+    func TTF_GetFontDescent(font: CPointer<Unit>): Int32
+
+    func TTF_GetFontHeight(font: CPointer<Unit>): Int32
+
+    func TTF_GetFontLineSkip(font: CPointer<Unit>): Int32
+
     func TTF_SetFontStyle(font: CPointer<Unit>, style: Int32): Unit
 
     func TTF_AddFallbackFont(font: CPointer<Unit>, fallback: CPointer<Unit>): Bool

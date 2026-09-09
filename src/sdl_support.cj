@@ -35,13 +35,11 @@ internal func lastSdlError(): String {
 /**
  * Throws `SdlException` when renderer defaults cannot be applied after window creation.
  */
-internal func configureRenderer(window: CPointer<Unit>, renderer: CPointer<Unit>, scale: Float32, vsync: Bool): Unit {
+internal func configureRenderer(renderer: CPointer<Unit>, scale: Float32, vsync: Bool): Unit {
     if (!unsafe { SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) }) {
-        destroyCreatedResources(window, renderer)
         throw SdlException("SDL_SetRenderDrawBlendMode failed: ${lastSdlError()}")
     }
     if (!unsafe { SDL_SetRenderScale(renderer, scale, scale) }) {
-        destroyCreatedResources(window, renderer)
         throw SdlException("SDL_SetRenderScale failed: ${lastSdlError()}")
     }
     // 1 = sync to every vertical blank; 0 = SDL_RENDERER_VSYNC_DISABLED (uncapped present).
@@ -69,7 +67,7 @@ internal func destroyCreatedResources(window: CPointer<Unit>, renderer: CPointer
 }
 
 internal func normalizedScale(scale: Float32): Float32 {
-    if (scale <= 0.0) {
+    if (scale <= 0.0 || scale.isNaN() || scale.isInf()) {
         1.0
     } else {
         scale
@@ -77,5 +75,13 @@ internal func normalizedScale(scale: Float32): Float32 {
 }
 
 internal func scaledDimension(value: Int32, scale: Float32): Int32 {
-    Int32(Float32(value) * scale)
+    let scaled = Float64(value) * Float64(normalizedScale(scale))
+    if (value < 0 || scaled > 2147483647.0) {
+        throw IllegalArgumentException("Window dimension must fit a non-negative Int32 after scaling")
+    }
+    if (value == 0) {
+        0
+    } else {
+        max(Int32(1), Int32(scaled))
+    }
 }

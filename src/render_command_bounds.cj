@@ -73,15 +73,15 @@ private func singleRenderCommandBounds(renderer: Renderer, command: RenderComman
         case RenderCommand.FillCircle(cx, cy, radius, _) => Some(circleCommandBounds(cx, cy, radius))
         case RenderCommand.FillConvexPolygon(points, _) => pointListCommandBounds(points)
         case RenderCommand.DrawTexturedStrip(_, points, _, _) => pointListCommandBounds(points)
-        case RenderCommand.DrawText(text, x, y, _, pointSize, style, font) => Some(
-            Rect(x, y, renderer.textWidth(text, pointSize: pointSize, style: style, font: font),
-                renderer.textHeight(pointSize: pointSize, style: style, font: font)))
+        case RenderCommand.DrawText(text, x, y, _, pointSize, style, font) =>
+            let bounds = renderer.textBounds(text, pointSize: pointSize, style: style, font: font)
+            Some(Rect(x + bounds.x, y + bounds.y, bounds.w, bounds.h))
         case RenderCommand.DrawTextRotated(text, centerX, centerY, _, _, pointSize, style, font) =>
-            let width = renderer.textWidth(text, pointSize: pointSize, style: style, font: font)
-            let height = renderer.textHeight(pointSize: pointSize, style: style, font: font)
-            let half = (width + height) / 2.0
+            let bounds = renderer.textBounds(text, pointSize: pointSize, style: style, font: font)
+            let half = (bounds.w + bounds.h) / 2.0
             Some(Rect(centerX - half, centerY - half, half * 2.0, half * 2.0))
         case RenderCommand.DrawTexture(_, destination, _) => Some(destination)
+        case RenderCommand.DrawStyledTexture(_, destination, _, _) => Some(destination)
         case RenderCommand.DrawTextureRotated(_, destination, _, _) =>
             let half = (destination.w + destination.h) / 2.0
             Some(Rect(destination.centerX() - half, destination.centerY() - half, half * 2.0, half * 2.0))

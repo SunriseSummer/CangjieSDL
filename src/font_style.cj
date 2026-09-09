@@ -6,15 +6,23 @@ package sdl
  * `bold` prefers the face's true bold companion file when one ships alongside it (msyh.ttc ->
  * msyhbd.ttc, segoeui.ttf -> segoeuib.ttf, X-Regular -> X-Bold), so bold text carries the family's
  * real hinted bold outlines; a face without a companion falls back to SDL_ttf's synthetic
- * emboldening. `italic` shears the glyphs and `underline` / `strikethrough` add a rule under or
- * through the run — those are synthesised for any script the font covers, Latin and CJK alike.
+ * emboldening. `italic` likewise prefers real Italic/BoldItalic faces before optional synthesis.
+ * Underline/strikethrough add decoration rules. Italic rendering uses a cached whole-run surface
+ * texture to avoid SDL_ttf renderer-atlas stretching of synthetic glyphs.
  * Styles compose freely, e.g. `FontStyle(bold: true, italic: true)`.
  *
  * The type is an immutable value; the `with…` helpers return adjusted copies so a style can be
  * built up a flag at a time.
  */
 public struct FontStyle <: Equatable<FontStyle> {
-    public let bold: Bool
+    public let variations: FontVariations
+    public let weight: FontWeight
+    /** Compatibility flag: numeric weights of 600 or greater are considered bold. */
+    public prop bold: Bool {
+        get() {
+            weight.value >= 600
+        }
+    }
     public let italic: Bool
     public let underline: Bool
     public let strikethrough: Bool
@@ -23,9 +31,18 @@ public struct FontStyle <: Equatable<FontStyle> {
         bold!: Bool = false,
         italic!: Bool = false,
         underline!: Bool = false,
-        strikethrough!: Bool = false
+        strikethrough!: Bool = false,
+        weight!: ?FontWeight = None,
+        variations!: FontVariations = FontVariations()
     ) {
-        this.bold = bold
+        this.variations = variations
+        this.weight = variations.requestedWeight(weight.getOrDefault({
+            => if (bold) {
+                FontWeight.bold
+            } else {
+                FontWeight.normal
+            }
+        }))
         this.italic = italic
         this.underline = underline
         this.strikethrough = strikethrough
@@ -37,28 +54,44 @@ public struct FontStyle <: Equatable<FontStyle> {
     /** Whether this is the plain style: no weight, slant, or decoration. */
     public prop isRegular: Bool {
         get() {
-            !bold && !italic && !underline && !strikethrough
+            variations.values().isEmpty() && weight == FontWeight.normal && !italic && !underline && !strikethrough
         }
     }
 
     /** This style with bold turned on (or set to `value`). */
     public func withBold(value!: Bool = true): FontStyle {
-        FontStyle(bold: value, italic: italic, underline: underline, strikethrough: strikethrough)
+        withWeight(if (value) {
+            FontWeight.bold
+        } else {
+            FontWeight.normal
+        })
+    }
+
+    /** This style with a numeric weight; bold is a compatibility shortcut for 700. */
+    public func withWeight(value: FontWeight): FontStyle {
+        FontStyle(weight: value, italic: italic, underline: underline, strikethrough: strikethrough,
+            variations: variations.withoutWeight())
+    }
+
+    /** Replaces design coordinates; explicit wght overrides the numeric weight request. */
+    public func withVariations(value: FontVariations): FontStyle {
+        FontStyle(weight: weight, variations: value, italic: italic, underline: underline, strikethrough: strikethrough)
     }
 
     /** This style with italic turned on (or set to `value`). */
     public func withItalic(value!: Bool = true): FontStyle {
-        FontStyle(bold: bold, italic: value, underline: underline, strikethrough: strikethrough)
+        FontStyle(weight: weight, variations: variations, italic: value, underline: underline,
+            strikethrough: strikethrough)
     }
 
     /** This style with an underline turned on (or set to `value`). */
     public func withUnderline(value!: Bool = true): FontStyle {
-        FontStyle(bold: bold, italic: italic, underline: value, strikethrough: strikethrough)
+        FontStyle(weight: weight, variations: variations, italic: italic, underline: value, strikethrough: strikethrough)
     }
 
     /** This style with a strikethrough turned on (or set to `value`). */
     public func withStrikethrough(value!: Bool = true): FontStyle {
-        FontStyle(bold: bold, italic: italic, underline: underline, strikethrough: value)
+        FontStyle(weight: weight, variations: variations, italic: italic, underline: underline, strikethrough: value)
     }
 
     /*
@@ -85,8 +118,8 @@ public struct FontStyle <: Equatable<FontStyle> {
     }
 
     public operator func ==(other: FontStyle): Bool {
-        bold == other.bold && italic == other.italic && underline == other.underline && strikethrough == other
-            .strikethrough
+        variations == other.variations && weight == other.weight && italic == other.italic && underline == other
+            .underline && strikethrough == other.strikethrough
     }
 
     public operator func !=(other: FontStyle): Bool {

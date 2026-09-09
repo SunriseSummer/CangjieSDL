@@ -1,9 +1,9 @@
 package sdl
 
 /**
- * A CPU-side RGBA pixel buffer wrapping an SDL_Surface — the staging ground for loading image
- * files, writing pixels, and saving BMPs before uploading to a GPU `Texture`. Close it to free
- * the native surface; reusing a closed surface throws `SdlException`.
+ * A CPU-side SDL_Surface used for image loading, pixel access and saving before GPU upload.
+ * Decoders choose the pixel format; `create` allocates RGBA32. Close it to free the native
+ * surface; reusing a closed surface throws `SdlException`.
  */
 public class Surface <: Resource {
     internal let ptr: CPointer<Unit>
@@ -25,22 +25,20 @@ public class Surface <: Resource {
     }
 
     /**
-     * Loads an image file, picking the decoder from the path's extension (`.png` reads as PNG,
-     * anything else as BMP). Throws `SdlException` when the file cannot be loaded.
+     * Loads a static image using SDL_image content detection. The extension is a fallback hint
+     * for formats such as TGA. Throws `SdlException` on decode failure or an exceeded pixel budget,
+     * and `IllegalArgumentException` for a path containing NUL.
      */
-    public static func load(path: String): Surface {
-        match (imageFormatFromPath(path)) {
-            case ImageFileFormat.Png => return loadPng(path)
-            case ImageFileFormat.Bmp => return loadBmp(path)
-        }
+    public static func load(path: String, options!: ImageLoadOptions = ImageLoadOptions()): Surface {
+        loadImageFile(path, options)
     }
 
-    /** Loads a BMP file (SDL_LoadBMP). Throws `SdlException` when the file cannot be loaded. */
+    /** Loads a BMP file (SDL_LoadBMP). Throws `SdlException` on load failure or `IllegalArgumentException` for NUL. */
     public static func loadBmp(path: String): Surface {
         loadWith(path, ImageFileFormat.Bmp)
     }
 
-    /** Loads a PNG file (SDL_LoadPNG). Throws `SdlException` when the file cannot be loaded. */
+    /** Loads a PNG file (SDL_LoadPNG). Throws `SdlException` on load failure or `IllegalArgumentException` for NUL. */
     public static func loadPng(path: String): Surface {
         loadWith(path, ImageFileFormat.Png)
     }
@@ -74,10 +72,12 @@ public class Surface <: Resource {
 
     /**
      * Writes the surface to a BMP file (SDL_SaveBMP).
-     * Throws `SdlException` when the surface is closed or SDL cannot save the file.
+     * Throws `SdlException` when the surface is closed or SDL cannot save the file,
+     * and `IllegalArgumentException` for a path containing NUL.
      */
     public func saveBmp(path: String): Unit {
         ensureOpen()
+        validateImageString(path)
         let cPath = unsafe { LibC.mallocCString(path) }
         try (pathResource = cPath.asResource()) {
             ensureSdl(unsafe { SDL_SaveBMP(ptr, pathResource.value) }, "SDL_SaveBMP")
@@ -110,7 +110,7 @@ public class Surface <: Resource {
     }
 }
 
-/** The image file formats surface loading understands. */
+/** Legacy BMP/PNG dispatch; `Surface.load` detects the wider SDL_image format set. */
 public enum ImageFileFormat {
     | Bmp
     | Png
@@ -118,7 +118,7 @@ public enum ImageFileFormat {
 
 /** The image format implied by a path's extension: `.png`/`.PNG` is PNG, anything else BMP. */
 public func imageFormatFromPath(path: String): ImageFileFormat {
-    if (path.endsWith(".png") || path.endsWith(".PNG")) {
+    if (path.toAsciiLower().endsWith(".png")) {
         ImageFileFormat.Png
     } else {
         ImageFileFormat.Bmp
@@ -126,9 +126,10 @@ public func imageFormatFromPath(path: String): ImageFileFormat {
 }
 
 /**
- * Throws `SdlException` when SDL cannot load the requested image file.
+ * Throws `SdlException` on load failure or `IllegalArgumentException` for a NUL path.
  */
 private func loadWith(path: String, format: ImageFileFormat): Surface {
+    validateImageString(path)
     let cPath = unsafe { LibC.mallocCString(path) }
     var surface = CPointer<Unit>()
     try (pathResource = cPath.asResource()) {

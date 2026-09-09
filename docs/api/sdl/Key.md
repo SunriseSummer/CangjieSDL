@@ -14,6 +14,8 @@ public enum Key {
     | Space
     | Home
     | End
+    | PageUp
+    | PageDown
     | Left
     | Right
     | Up
@@ -46,9 +48,13 @@ main(): Unit {
 | 值 | 含义 |
 |---|---|
 | `Escape`、`Backspace`、`Enter`、`Tab`、`Delete`、`Space` | 常用控制键。 |
-| `Home`、`End`、`Left`、`Right`、`Up`、`Down` | 导航键。 |
+| `Home`、`End`、`PageUp`、`PageDown`、`Left`、`Right`、`Up`、`Down` | 导航键。 |
 | `Letter(UInt8)` | 字母键，携带大写 ASCII 码 65–90；随当前键盘布局变化。 |
 | `Digit(UInt8)` | 数字键，携带 ASCII 码 48–57。 |
 | `RawScancode(Int32)` | 未映射按键，保留 SDL 原始扫描码。 |
 
 需要同时保存物理扫描码、逻辑键值和修饰键时，使用 [`UiEventRecord`](UiEventRecord.md) 的 [`UiEventMetadata`](UiEventMetadata.md)。
+
+## 翻页导航
+
+`PageUp` 与 `PageDown` 对应原生 SDL scancode 75／78，供多行编辑控件按页导航。原先依赖 `RawScancode(75/78)` 的处理器应迁移到这两个具名变体；对 Key 做穷尽匹配时也需补充分支。

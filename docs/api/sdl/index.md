@@ -48,7 +48,6 @@ import sdl.*
 | [`Rect`](Rect.md) | 逻辑矩形及常用几何运算。 |
 | [`Insets`](Insets.md) | 四边间距。 |
 | [`SurfaceStyle`](SurfaceStyle.md) | 面板填充、边框、圆角和阴影样式。 |
-| [`IconName`](IconName.md) | 内置矢量图标名称。 |
 
 ## 文字
 
@@ -78,7 +77,6 @@ import sdl.*
 |---|---|
 | [`SdlException`](SdlException.md) | SDL 调用、资源状态或封装层操作失败。 |
 | [`clampF32`](functions.md#clampf32) | 将浮点值限制在闭区间内。 |
-| [`drawIcon`](functions.md#drawicon) | 绘制内置矢量图标。 |
 | [`imageFormatFromPath`](functions.md#imageformatfrompath) | 根据文件扩展名选择图像格式。 |
 | [`sdlVersion`](functions.md#sdlversion) | 查询链接的 SDL 版本号。 |
 | [`sdlRevision`](functions.md#sdlrevision) | 查询 SDL 构建修订字符串。 |
@@ -91,3 +89,31 @@ import sdl.*
 | [`sdl.dialogs`](dialogs/index.md) | 消息框和异步文件对话框。 |
 | [`sdl.displays`](displays/index.md) | 显示器信息和全屏模式。 |
 | [`sdl.system`](system/index.md) | 路径、文件、元数据、时间、电源和平台信息。 |
+
+## 字体配置与诊断
+
+- [`FontSource`](FontSource.md)：字体文件与集合面号。
+- [`FontFamily`](FontFamily.md)：不可变字体族定义。
+- [`ResolvedFontFace`](ResolvedFontFace.md)：渲染器实际打开的字体面。
+- [`FontResolution`](FontResolution.md)：一次字体解析快照：请求的族名、实际主字体及 fallback 面、失败诊断。
+- [`FontMetrics`](FontMetrics.md)：主字体的垂直度量，单位为逻辑像素。
+- [`FontCacheStats`](FontCacheStats.md)：渲染器字体缓存诊断。
+- [`InstalledFontFace`](InstalledFontFace.md)：标准系统/用户字体目录中发现的字体面元数据。
+
+## 数值字重与设计轴
+
+- [FontWeight](FontWeight.md)
+- [FontVariation](FontVariation.md)
+- [FontVariations](FontVariations.md)
+- [FontAxis](FontAxis.md)
+- [FontRole](FontRole.md)
+- [FontFaceDefinition](FontFaceDefinition.md)
+
+## 静态图像配置
+
+| 类型/函数 | 说明 |
+|---|---|
+| [ImageLoadOptions](ImageLoadOptions.md) | 解码尺寸与像素预算。 |
+| [TextureStyle](TextureStyle.md) | 可重放的逐次绘制样式。 |
+| [TextureScaleMode](TextureScaleMode.md) | 最近邻或线性采样。 |
+| [imageVersion](functions.md#imageversion) | SDL_image 运行时版本。 |

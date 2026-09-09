@@ -214,6 +214,16 @@ public struct Rect {
 
     /** The overlap of two rectangles; degenerates to a zero-area rect when they are disjoint. */
     public func intersection(other: Rect): Rect {
+        // Preserve a contained rectangle verbatim. Reconstructing height as bottom - y can
+        // add an ULP, which becomes a whole extra scissor row after outward pixel rounding.
+        if (w >= 0.0 && h >= 0.0 && other.w >= 0.0 && other.h >= 0.0) {
+            if (x <= other.x && y <= other.y && right() >= other.right() && bottom() >= other.bottom()) {
+                return other
+            }
+            if (other.x <= x && other.y <= y && other.right() >= right() && other.bottom() >= bottom()) {
+                return this
+            }
+        }
         let nx = max(x, other.x)
         let ny = max(y, other.y)
         Rect(nx, ny, max(0.0, min(right(), other.right()) - nx), max(0.0, min(bottom(), other.bottom()) - ny))

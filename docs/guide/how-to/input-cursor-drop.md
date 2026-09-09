@@ -14,13 +14,15 @@
 
 ## 操作步骤
 
-在事件匹配中，让 Esc 改变运行状态，Backspace 调用按 Unicode 字符删除的业务函数，`TextInput` 追加系统已经组合好的文字，`MouseMove` 只更新逻辑坐标。拖放开始时清空本次集合，`DropFile` 只累计路径，`DropComplete` 才把完整列表交给加载队列。不要在事件分支内执行耗时文件读取。
+在事件匹配中，让 Esc 改变运行状态，Backspace 按字素簇边界删除末尾可见字符，`TextInput` 追加系统已经组合好的文字，`MouseMove` 只更新逻辑坐标。拖放开始时清空本次集合，`DropFile` 只累计路径，`DropComplete` 才把完整列表交给加载队列。不要在事件分支内执行耗时文件读取。
 
-窗口创建后可用 `Cursor.system(SystemCursor.Pointer)` 创建并激活指针光标；悬停可点击区域时切换 Hand，离开后切回默认。不要每次 MouseMove 都创建新 Cursor，预先创建并复用。
+窗口创建后，用 `Cursor.system(SystemCursor.Pointer)` 创建手形光标，用 `Cursor.system(SystemCursor.Default)` 创建默认箭头；创建不会自动激活。悬停可点击区域时调用手形实例的 `setActive()`，离开时激活箭头实例。预先创建并复用两个 `Cursor`，在窗口关闭前释放。
+
+文本删除可使用 `sdl.text.graphemeByteBoundaries` 获取 UTF-8 字节边界；非空文本截取到倒数第二个边界，即移除最后一个字素簇。这样组合音标或 ZWJ emoji 不会被拆成残片。详见[文本分段函数](../../api/sdl/text/functions.md)。
 
 ## 确认结果
 
-输入中文和英文时，画面中的 `typedText` 与系统提交内容一致；Backspace 只删除一个 Unicode 字符而不是破坏编码。移动鼠标时坐标与逻辑按钮位置一致。一次拖入多个文件时，日志先出现 Begin，再出现所有路径，最后只调用一次处理。光标进入按钮变成手形，离开恢复。关闭窗口后 Cursor 和窗口都只关闭一次，进程退出码为 0。
+输入中文和英文时，画面中的 `typedText` 与系统提交内容一致；Backspace 删除一个完整字素簇，同时测试中文、组合音标和 ZWJ emoji。移动鼠标时坐标与逻辑按钮位置一致。一次拖入多个文件时，日志先出现 Begin，再出现所有路径，最后只调用一次处理。光标进入按钮变成手形，离开恢复。关闭窗口后 Cursor 和窗口都只关闭一次，进程退出码为 0。
 
 ## 常见错误
 
@@ -28,9 +30,9 @@
 
 ## 可以继续修改
 
-加入以指针位置为中心的滚轮缩放时，按 `MouseWheel(wheelX, wheelY, pointerX, pointerY)` 的顺序解构；用 `clampF32` 把缩放限制在 0.5 到 3.0，并保存当前指针为中心。物理 R 键可用 `Key.Letter(UInt8(82))` 匹配，且只在 `repeat = false` 时复位。
+加入以指针位置为中心的滚轮缩放时，按 `MouseWheel(wheelX, wheelY, pointerX, pointerY)` 的顺序解构；用 `clampF32` 把缩放限制在 0.5 到 3.0，并保存当前指针为中心。逻辑 R 键可用 `Key.Letter(UInt8(82))` 匹配，且只在 `repeat = false` 时复位；它会随键盘布局变化。若操作必须绑定键盘物理位置，应读取 `UiEventRecord.metadata.physicalScancode`。
 
-确认滚轮向上和向下改变缩放，缩放中心跟随当前指针，物理 R 键恢复初始值；文本输入仍只经过 `TextInput`。
+确认滚轮向上和向下改变缩放，缩放中心跟随当前指针，逻辑 R 键恢复初始值；文本输入仍只经过 `TextInput`。
 
 ## 相关 API
 

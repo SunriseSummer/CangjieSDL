@@ -1,159 +1,54 @@
-[sdl](../index.md) › [sdl](index.md) › Fonts
+[sdl](index.md) › Fonts
 
 # Fonts
 
-位于 `sdl` 包的公开类。
+主线程访问的应用字体注册表和系统字体目录。显式注册优先，系统名称采用 ASCII 大小写不敏感匹配；平台提供的本地化别名也可使用。系统字体并不计入 names、isRegistered、familyFor 等应用注册查询。
 
-进程级注册表，把应用字体名映射到有序字体链，类似 CSS 的 `font-family` / `@font-face`。启动时注册一次名字，之后在 [`Renderer.text`](Renderer.md#text) 的 `font` 参数中按名引用；渲染器在首次使用时懒加载并缓存字体文件。
+setDefault(None) 恢复系统 UI 角色；setFallbacks 配置全局缺字/随附字体回退，也用于无系统字体环境的引导。setSearchDirectories 增加应用发现目录并刷新缓存，不替代系统目录。传入和返回的数组相互独立。
 
-## 声明
+系统服务使用 Windows 系统设置及 DirectWrite、Linux fontconfig、macOS CoreText。默认角色、指定族名、registerSystem 和 familyFaces 只解析所需字体；未知名称不会触发全量系统扫描。systemFamilyNames、systemFonts、systemFontWarnings 显式加载完整目录，适合字体选择器。启动仅复用已经显式加载的目录，不因定向查找失败而全量扫描。仅支持可访问的文件字体，私有内存/远程字体、系统逐字符 fallback 和安装通知不在此接口范围内。
+
+refreshSystemFonts 清除平台匹配、目录及文件元数据缓存并推进 revision，下次按需查询；reload 等同于 refreshSystemFonts(force: true)，包括强制失效持久元数据缓存，调用本身不扫描目录。重新注册同名文件也会重试之前的失败加载。已注册系统别名保留原文件位置，刷新后按需重读这些文件的元数据；若字体安装位置改变，重新 registerSystem。clear 清除应用注册、默认、全局回退和附加目录。存活测量会话保留原有字体图；替换字体文件前应关闭会话并 renderer.reloadFonts()，替换后调用 Fonts.reload()。
+
+supportsVariations 查询官方 SDL_ttf 3.2+ 的支持版本。字体元数据、平台匹配和变量坐标处理均由仓颉代码实现，无需扩展 DLL 或修改 SDL_ttf。优先复用已有命名实例；任意坐标通过微小的虚拟 SFNT 数据表和公开 IOStream/face-index 接口打开，原字体文件不变，也不按坐标复制整份字库。显式未知或越界坐标报错。
+
+## 声明与成员
 
 ```cangjie
 public class Fonts
-```
-
-## 说明
-
-主字体缺少字形时，会按 `fallbackPaths` 的顺序尝试同字号、同样式的回退字体，最后使用平台 UI 字体。字体名称未注册或文件无法打开时也会回退。注册操作只保存映射，不访问文件，因此可以在创建窗口前完成。注册表是未加锁的进程级状态，应在主线程、首次渲染前修改。
-
-## 示例
-
-```cangjie verify
-package docexample
-
-import sdl.Fonts
-
-main(): Unit {
-    Fonts.register("正文", "C:/Windows/Fonts/msyh.ttc")
-    println(Fonts.isRegistered("正文"))
-    match (Fonts.pathFor("正文")) {
-        case Some(path) => println(path)
-        case None => println("未注册")
-    }
-    Fonts.unregister("正文")
-    println(Fonts.names().size)
-    // 输出:
-    // true
-    // C:/Windows/Fonts/msyh.ttc
-    // 0
-}
-```
-
-## 成员概览
-
-**方法**
-
-| 成员 | 说明 |
-|---|---|
-| [`static register(name: String, path: String)`](#register) | 把名字映射到字体文件路径（`.ttf`、`.ttc` 或 `.otf`），重复注册同名即替换。 |
-| [`static registerFamily(name: String, primaryPath: String, fallbackPaths!: Array<String>)`](#registerfamily) | 注册主字体与有序缺字回退链。 |
-| [`static fallbackPathsFor(name: String)`](#fallbackpathsfor) | 返回独立的回退字体路径数组。 |
-| [`static pathFor(name: String)`](#pathfor) | 返回名字对应的注册路径，未注册时为 `None`。 |
-| [`static isRegistered(name: String)`](#isregistered) | 判断名字是否已注册。 |
-| [`static unregister(name: String)`](#unregister) | 移除注册；从未注册时为空操作。 |
-| [`static clear()`](#clear) | 清空全部注册，主要用于测试隔离。 |
-| [`static revision()`](#revision) | 返回注册表变化代数，供文本布局缓存安全失效。 |
-| [`static names()`](#names) | 返回全部已注册名字，顺序不定。 |
-
-## 方法
-
-### register
-
-把名字映射到字体文件路径（`.ttf`、`.ttc` 或 `.otf`），重复注册同名即替换。只记录映射，不访问文件系统。
-
-```cangjie
+public static func setMetadataCache(path: ?String): Unit
+public static func metadataCache(): ?String
 public static func register(name: String, path: String): Unit
-```
-
-**参数**
-
-- `name`: `String` — 应用内使用的字体名。
-- `path`: `String` — 字体文件路径。
-
-### pathFor
-
-返回名字对应的注册路径，未注册时为 `None`。
-
-```cangjie
+public static func registerFamily(name: String, primaryPath: String, fallbackPaths!: Array<String> = []): Unit
+public static func registerFamily(name: String, family: FontFamily): Unit
+public static func familyFor(name: String): ?FontFamily
+public static func familyFaces(name: String): Array<InstalledFontFace>
+public static func setSearchDirectories(directories: Array<String>): Unit
+public static func searchDirectories(): Array<String>
+public static func systemFamilyNames(): Array<String>
+public static func systemFonts(): Array<InstalledFontFace>
+public static func systemFontWarnings(): Array<String>
+public static func registerSystem(name: String, familyName: String): Bool
+public static func refreshSystemFonts(force!: Bool = false): Unit
 public static func pathFor(name: String): ?String
-```
-
-**参数**
-
-- `name`: `String` — 要查询的字体名。
-
-**返回值** `?String` — 注册的路径；名字未知时为 `None`。
-
-### registerFamily
-
-注册主字体和按顺序尝试的缺字回退字体。SDL_ttf 只在当前字体缺少字形时尝试下一项，每个字体使用相同字号和样式。更改注册会推进 `revision`，现有渲染器随后清空相关度量与旋转文字缓存。
-
-```cangjie
-public static func registerFamily(name: String, primaryPath: String,
-    fallbackPaths!: Array<String> = []): Unit
-```
-
-### fallbackPathsFor
-
-```cangjie
 public static func fallbackPathsFor(name: String): Array<String>
-```
-
-返回注册顺序的独立数组；未知名字返回空数组。
-
-### isRegistered
-
-判断名字是否已注册。
-
-```cangjie
 public static func isRegistered(name: String): Bool
-```
-
-**参数**
-
-- `name`: `String` — 要查询的字体名。
-
-**返回值** `Bool` — 已注册时为 `true`。
-
-### unregister
-
-移除注册；从未注册时为空操作。
-
-```cangjie
 public static func unregister(name: String): Unit
-```
-
-**参数**
-
-- `name`: `String` — 要移除的字体名。
-
-### clear
-
-清空全部注册，主要用于测试隔离。
-
-```cangjie
 public static func clear(): Unit
-```
-
-### revision
-
-返回注册表变化代数。`register`、`unregister` 或 `clear` 后都会变化；上层文本布局缓存可把它纳入键，避免同名字重新绑定字体后复用旧断行。
-
-```cangjie
+public static func setFallbacks(sources: Array<FontSource>): Unit
+public static func fallbacks(): Array<FontSource>
+public static func setDefault(name: ?String): Unit
+public static func defaultFamily(): ?String
+public static func reload(): Unit
 public static func revision(): UInt64
-```
-
-### names
-
-返回全部已注册名字，顺序不定。
-
-```cangjie
 public static func names(): Array<String>
+public static func supportsVariations(): Bool
 ```
 
-**返回值** `Array<String>` — 已注册名字的数组。
+参见[字体配置与绘制](../../guide/how-to/text-and-fonts.md)。
 
-## 另请参阅
+## 持久元数据缓存
 
-- [Renderer.text](Renderer.md#text) — 按注册名选择字体绘制文本。
-- [FontStyle](FontStyle.md) — 字重与修饰样式。
+setMetadataCache(path) 启用应用管理的可选目录元数据缓存，默认关闭，父目录需提前创建。显式枚举目录时仍检查文件大小和修改时间，命中则跳过 SFNT 元数据读取；缓存损坏、文件变化或缓存格式升级时重建。refreshSystemFonts(force: true) 包括同大小同时间戳替换等情况。日常定向匹配另有 8 MiB／512 文件的内存元数据缓存和 512 项失败路径缓存，不进行每帧文件检查；替换文件后须 reload 或重新注册。缓存不是字体文件或渲染结果的替代品，持久缓存写入失败仅记入 systemFontWarnings。
+
+资源与输入上限见[文本与字体缓存](../../guide/concepts/text-font-cache.md)。常规启动和按族名查询不建立完整目录；`familyFaces(name)` 适合按需显示所选字体的样式和设计轴。

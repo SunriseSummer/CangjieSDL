@@ -7,6 +7,10 @@ import sdl.clampF32
 
 func runGame(window: SdlWindow): Unit {
     let state = GameState()
+    prepareFirstFrame(window, state)
+    window.show()
+    // Showing a native window may invalidate its backbuffer; redraw before processing input.
+    draw(window.renderer, state)
     var lastTicks = window.ticks()
 
     while (state.isRunning) {
@@ -54,4 +58,9 @@ func setKey(state: GameState, key: Key, isDown: Bool): Unit {
         // 其余按键不参与操作
         case _ => ()
     }
+}
+
+// Keep resource preparation and the first complete presentation inside the hidden phase.
+func prepareFirstFrame(window: SdlWindow, state: GameState): Unit {
+    draw(window.renderer, state)
 }

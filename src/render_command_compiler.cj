@@ -27,6 +27,7 @@ internal class RenderCommandRecorder {
         match (command) {
             case RenderCommand.DrawTexturedStrip(texture, _, _, _) => addResource(texture)
             case RenderCommand.DrawTexture(texture, _, _) => addResource(texture)
+            case RenderCommand.DrawStyledTexture(texture, _, _, _) => addResource(texture)
             case RenderCommand.DrawTextureRotated(texture, _, _, _) => addResource(texture)
             case RenderCommand.ReplaySlot(slot) => addSlot(slot)
             case _ => ()

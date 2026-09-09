@@ -10,7 +10,7 @@ Surface 是 CPU 可以读取和修改的像素表面，Texture 是与 Renderer �
 
 截图、离线像素生成和图片保存需要 CPU 表面；游戏精灵、图标和背景需要每帧快速绘制的纹理。若每帧重新 `Surface.load` 再上传，会反复解码、分配和传输；若只保留 Surface 而不用纹理，渲染路径无法获得重复绘制优势；若关闭 Texture 后仍绘制，封装会报告无效状态。
 
-`Surface.load` 按扩展名选择 BMP 或 PNG，也可显式调用相应加载函数。Surface 支持创建、清屏、读写像素与保存 BMP。Renderer 的 `textureFromSurface` 上传现有 Surface，`loadTexture` 则直接从文件完成加载与上传。Texture 可设置混合模式和颜色、透明度调制，绘制时可指定源区域、旋转中心和翻转。
+`Surface.load` 通过 SDL3_image 按内容识别静态图像，扩展名可为 TGA 等无签名格式提供提示。Surface 支持创建、清屏、读写像素与保存 BMP、PNG、JPEG。Renderer 的 `textureFromSurface` 上传现有 Surface，`loadTexture` 则直接从文件完成加载与上传。Texture 可设置混合模式和颜色、透明度调制，绘制时可指定源区域、旋转中心和翻转。
 
 ## 工作模型
 
@@ -22,7 +22,7 @@ Surface 是 CPU 可以读取和修改的像素表面，Texture 是与 Renderer �
 
 只需要绘制文件图片时优先 `loadTexture`，代码更短；需要检查尺寸、改像素、合成或另存时先用 Surface。大量小图片可合并为图集并用 source Rect 选择区域，减少资源数量；代价是需要维护图集坐标。旋转和翻转适合 Texture，复杂 CPU 滤镜适合 Surface；不要为了使用一个 API 而在两边来回转换。
 
-透明图片应使用 Blend 模式，纯不透明背景可用更简单模式。颜色和透明度调制会影响后续所有该纹理绘制，若同一纹理承担不同效果，绘制前明确设置并在需要时恢复。纹理与创建它的 Renderer 绑定，不能跨窗口随意共享。
+普通 `texture` 绘制遵循纹理的混合模式；透明图片应使用 Blend。需要逐次设置透明度、着色或圆角时优先使用 `textureStyled`，其样式不会污染共享纹理。颜色和透明度调制会影响后续所有该纹理绘制，若同一纹理承担不同效果，绘制前明确设置并在需要时恢复。纹理与创建它的 Renderer 绑定，不能跨窗口随意共享。
 
 ## 应用这个模型
 
@@ -32,11 +32,11 @@ Surface 是 CPU 可以读取和修改的像素表面，Texture 是与 Renderer �
 
 ## 常见误解
 
-Texture 不是普通像素数组，不能像 Surface 那样随意读写。上传 Texture 后关闭 Surface 是安全的，但关闭窗口后继续保留 Texture 不是安全的。`Surface.load` 支持的格式由封装明确限定，不能把任意扩展名交给它碰运气。截图成功返回也不代表画面正确，仍要读取图片尺寸并实际打开检查。
+Texture 不是普通像素数组，不能像 Surface 那样随意读写。上传 Texture 后关闭 Surface 是安全的，但关闭窗口后继续保留 Texture 不是安全的。`Surface.load` 支持的格式取决于 SDL3_image 的实际构建，扩展名不等同于格式支持保证。截图成功返回也不代表画面正确，仍要读取图片尺寸并实际打开检查。
 
 ## 相关 API
 
-- [`Surface`](../../api/sdl/Surface.md)：CPU 像素、文件加载与 BMP 保存。
+- [`Surface`](../../api/sdl/Surface.md)：CPU 像素、静态图像加载与 BMP／PNG／JPEG 保存。
 - [`Texture`](../../api/sdl/Texture.md)：纹理尺寸、混合与调制。
 - [`TextureRenderOptions`](../../api/sdl/TextureRenderOptions.md)：旋转中心和翻转。
 - [`Renderer`](../../api/sdl/Renderer.md)：上传、绘制与截图。

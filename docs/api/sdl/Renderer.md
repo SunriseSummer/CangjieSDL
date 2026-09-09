@@ -6,6 +6,8 @@
 
 二维绘制入口，负责场景提交、几何、文字、纹理、视口和裁剪。所有坐标使用逻辑像素。真实实例由 [`SdlWindow`](SdlWindow.md) 创建并通过 `window.renderer` 提供；测试可以使用 [`headless`](#headless) 创建无设备实例。
 
+SdlWindow 在建窗前自动绑定当前仓颉线程与原生线程；同一线程的多个窗口共享绑定，最后一个关闭时释放。窗口及其 Renderer 在存活期间因此保持原生线程归属；仍必须在创建它们的仓颉线程使用。窗口应从程序主线程创建。错误线程或释放后访问在进入 SDL 前抛出 `IllegalStateException`。UI 代码避免会暂停输入和绘制的阻塞式 `Future.get()`；后台任务用 `wake()` 通知并由 UI 非阻塞取回结果。`SdlWindow.wake()` 可跨线程调用，与关闭互斥，关闭后返回 false；重复 `close()` 无操作。无原生句柄的 headless Renderer 只检查仓颉线程。
+
 ## 声明
 
 ```cangjie
@@ -26,7 +28,7 @@ public class Renderer
 
 SDL 的失败状态会影响本次设置、查询或纹理绘制时，`Renderer` 将其转换为 `SdlException`；明确说明为空操作、返回估算值或可选缓存 `None` 的路径不调用或不传播 SDL 失败。
 
-文字按 `pointSize × 纵向缩放` 的实际像素尺寸生成字形，并对齐物理像素绘制，避免先生成小字再放大造成模糊。度量结果也按实际字号缓存，再映射回逻辑坐标，因此高 DPI、应用缩放和超采样下仍能复用。旋转文字会把整串内容缓存为纹理；缓存键包含文字、字号、样式、字体和缩放，颜色在每次绘制时单独应用。
+文字按 `pointSize × 纵向缩放` 的实际像素尺寸生成字形，并对齐物理像素绘制，避免先生成小字再放大造成模糊。度量结果也按实际字号缓存，再映射回逻辑坐标，因此高 DPI、应用缩放和超采样下仍能复用。斜体／旋转文字把整串内容缓存为纹理；键包含文字、字号、样式、字体及缩放，包含彩色字形时另区分 RGB。单色纹理跨 RGB 复用；透明度均按次应用，彩色字形保留自身颜色。
 
 ## 示例
 
@@ -120,7 +122,7 @@ main(): Unit {
 | 成员 | 说明 |
 |---|---|
 | [`textureFromSurface(surface: Surface)`](#texturefromsurface) | 把表面上传为 GPU 纹理。 |
-| [`loadTexture(path: String)`](#loadtexture) | 从 BMP/PNG 文件加载纹理（内部经 `Surface.load` 中转并自动释放表面）。 |
+| [`loadTexture(path: String)`](#loadtexture) | 从 SDL_image 支持的静态图像文件加载纹理（内部经 `Surface.load` 中转并自动释放表面）。 |
 | [`texture(texture: Texture, destination: Rect, source!: ?Rect)`](#texture) | 把纹理（或其 `source` 源区域）绘制到目标矩形，按需拉伸。 |
 | [`textureRotated(texture: Texture, destination: Rect, angle: Float64, options!: TextureRenderOptions)`](#texturerotated) | 旋转绘制纹理，可选源区域、旋转中心与镜像（见 `TextureRenderOptions`）。 |
 
@@ -236,7 +238,7 @@ public func beginSceneDamage(
 ): Bool
 ```
 
-调用方仍须按正常顺序调用 [`endScene`](#endscene) 和 [`present`](#present)，并重放所有与 `damage` 相交的命令缓冲，保持原有绘制顺序和混合结果。局部更新只使用当前渲染器拥有且尺寸匹配的离屏目标，不尝试从窗口后备缓冲区恢复内容。
+调用方仍须按正常顺序调用 [`endScene`](#endscene) 和 [`present`](#present)。成功后以 `currentClip()` 返回的实际损伤范围重放相交内容，保持绘制顺序和混合结果：后端可能向外扩展请求区域，使逻辑整数裁剪和物理像素边界同时对齐；极少见的比例若无法在每边 15 vp 内对齐，则退回整帧。局部更新只使用当前渲染器拥有且尺寸匹配的离屏目标，不从窗口后备缓冲区恢复内容。无头模式无实际像素裁剪，调用方可继续使用请求范围。
 
 **返回值** `Bool` — `true` 表示本帧采用局部更新；`false` 表示已经退回整帧绘制。
 
@@ -401,6 +403,8 @@ public func viewport(): Rect
 
 把裁剪收窄到 `rect` 与当前裁剪的交集，嵌套的滚动区与输入框因此各自在祖先内裁剪。每次调用与 [`popClip`](#popclip) 配对。
 
+SDL 接受整数逻辑裁剪矩形；分数边界向外取整。文字临时切换到物理像素绘制时使用与普通图形一致的换算，避免高 DPI 下局部刷新缺列或反复叠色。`currentClip()` 返回逻辑范围，实际栅格覆盖仍经过 SDL 的整数换算。
+
 ```cangjie
 public func pushClip(rect: Rect): Unit
 ```
@@ -408,6 +412,10 @@ public func pushClip(rect: Rect): Unit
 **参数**
 
 - `rect`: `Rect` — 希望裁剪到的区域；实际生效的是它与当前裁剪的交集。
+
+原生 SDL 裁剪采用整数逻辑坐标。框架对交集的左／上边界向下取整、右／下边界向上取整，保证小数布局的完整覆盖；每边最多扩张不到一个逻辑像素，空交集不会因取整变为非空。`currentClip()` 保留原始逻辑交集，`clipRect()` 返回 SDL 实际使用的整数矩形。
+
+原生有效裁剪包含非有限值或坐标、宽高或相加后的右／下边界超出 SDL 整数表示范围时抛出 `IllegalArgumentException`。原生设置失败时不提交逻辑栈变更；`popClip()` 同样在原生恢复成功后才弹栈。
 
 ### popClip
 
@@ -755,7 +763,7 @@ public func text(text: String, x: Float32, y: Float32, color: Color, pointSize!:
 - `color`: `Color` — 文字颜色。
 - `pointSize!`: `Float32` — 字号；默认 [`FontSizes.BODY`](FontSizes.md#body)。
 - `style!`: `FontStyle` — 样式；默认 [`FontStyle.regular`](FontStyle.md#regular)。
-- `font!`: `?String` — [`Fonts`](Fonts.md) 注册名；默认值为 `None`，使用平台 UI 字体；传入未注册的名称也回退到平台 UI 字体。
+- `font!`: `?String` — 应用注册名、可发现的系统族名或 FontRole 角色；None 继承当前字体作用域／应用默认，最终回退平台 UI 字体。
 
 ### textWidth
 
@@ -770,7 +778,7 @@ public func textWidth(text: String, pointSize!: Float32 = FontSizes.BODY, style!
 - `text`: `String` — 被测文本。
 - `pointSize!`: `Float32` — 字号；默认 `FontSizes.BODY`。
 - `style!`: `FontStyle` — 样式；默认 `FontStyle.regular`。
-- `font!`: `?String` — 字体注册名；默认 `None`。
+- `font!`: `?String` — 应用注册名、系统族名或 FontRole 角色；None 继承字体作用域／应用默认。
 
 **返回值** `Float32` — 文本宽度，逻辑像素。
 
@@ -786,7 +794,7 @@ public func textHeight(pointSize!: Float32 = FontSizes.BODY, style!: FontStyle =
 
 - `pointSize!`: `Float32` — 字号；默认 `FontSizes.BODY`。
 - `style!`: `FontStyle` — 样式；默认 `FontStyle.regular`。
-- `font!`: `?String` — 字体注册名；默认 `None`。
+- `font!`: `?String` — 应用注册名、系统族名或 FontRole 角色；None 继承字体作用域／应用默认。
 
 **返回值** `Float32` — 行高，逻辑像素。
 
@@ -803,7 +811,7 @@ public func textMeasureSession(text: String, pointSize!: Float32 = FontSizes.BOD
 
 ### textCenter
 
-在矩形内居中绘制文本（水平垂直都以测量结果居中）。
+在矩形内按实际字形位图及装饰线边界居中，排除字体行框的上下留白，适合按钮等独立短文本。仓颉文字引擎基于官方 SDL_ttf 的公开布局接口计算边界；Headless 使用保守行框。
 
 ```cangjie
 public func textCenter(text: String, rect: Rect, color: Color, pointSize!: Float32 = FontSizes.BODY, style!: FontStyle = FontStyle.regular, font!: ?String = None): Unit
@@ -816,11 +824,11 @@ public func textCenter(text: String, rect: Rect, color: Color, pointSize!: Float
 - `color`: `Color` — 文字颜色。
 - `pointSize!`: `Float32` — 字号；默认 `FontSizes.BODY`。
 - `style!`: `FontStyle` — 样式；默认 `FontStyle.regular`。
-- `font!`: `?String` — 字体注册名；默认 `None`。
+- `font!`: `?String` — 应用注册名、系统族名或 FontRole 角色；None 继承字体作用域／应用默认。
 
 ### textRotated
 
-绕（`centerX`, `centerY`）旋转 `angleDegrees`（顺时针；-90 为自下而上阅读）绘制文本。整串按有效像素尺寸栅格化进纹理并经旋转纹理管线绘制，栅格化结果跨帧缓存（颜色以颜色调制按次生效），静态旋转标签只需栅格化一次。无头或空文本时为空操作。
+绕（`centerX`, `centerY`）旋转 `angleDegrees`（顺时针；-90 为自下而上阅读）绘制文本。整串按有效像素尺寸栅格化进纹理并经旋转纹理管线绘制，栅格化结果跨帧缓存；包含彩色字形时 RGB 参与键，单色纹理跨 RGB 复用。透明度按次生效，彩色 Emoji 保留自身调色板。静态旋转标签只需栅格化一次。无头、空文本或无绘制面积的文本为空操作。
 
 ```cangjie
 public func textRotated(text: String, centerX: Float32, centerY: Float32, angleDegrees: Float64, color: Color, pointSize!: Float32 = FontSizes.BODY, style!: FontStyle = FontStyle.regular, font!: ?String = None): Unit
@@ -834,7 +842,7 @@ public func textRotated(text: String, centerX: Float32, centerY: Float32, angleD
 - `color`: `Color` — 文字颜色，含 alpha。
 - `pointSize!`: `Float32` — 字号；默认 `FontSizes.BODY`。
 - `style!`: `FontStyle` — 样式；默认 `FontStyle.regular`。
-- `font!`: `?String` — 字体注册名；默认 `None`。
+- `font!`: `?String` — 应用注册名、系统族名或 FontRole 角色；None 继承字体作用域／应用默认。
 
 **异常**
 
@@ -890,7 +898,7 @@ public func resetTextMeasureCount(): Unit
 
 ### captureBmp
 
-读回当前渲染目标并写为 BMP 文件，用于自动化视觉快照与文档缩略图。无头时为空操作——没有可读的像素。
+读回当前渲染目标并写为 BMP。完整窗口截图应在 RenderPass 结束后、`present()` 之前调用；场景内部可能读到超采样中间目标。无头时为空操作，不生成文件。
 
 ```cangjie
 public func captureBmp(path: String): Unit
@@ -926,15 +934,15 @@ public func textureFromSurface(surface: Surface): Texture
 
 ### loadTexture
 
-从 BMP/PNG 文件加载纹理（内部经 [`Surface.load`](Surface.md#load) 中转并自动释放表面）。
+从 SDL_image 支持的静态图像文件加载纹理（内部经 [`Surface.load`](Surface.md#load) 中转并自动释放表面）。
 
 ```cangjie
-public func loadTexture(path: String): Texture
+public func loadTexture(path: String, options!: ImageLoadOptions = ImageLoadOptions()): Texture
 ```
 
 **参数**
 
-- `path`: `String` — 图像文件路径；按扩展名推断格式。
+- `path`: `String` — 图像文件路径；按内容识别，扩展名仅作为无签名格式的提示。
 
 **返回值** `Texture` — 新建的纹理。
 
@@ -978,6 +986,110 @@ public func textureRotated(texture: Texture, destination: Rect, angle: Float64, 
 **异常**
 
 - `SdlException` — 纹理已关闭，或 SDL 绘制失败时。
+
+## 字体环境、度量与诊断
+
+### textMeasurementScale
+
+返回当前文字度量实际使用的 x/y 栅格比例，包含渲染阶段的超采样。外部布局缓存必须连同字体版本和样式环境考虑它。
+
+```cangjie
+public func textMeasurementScale(): Size
+```
+
+### effectiveFontFamily
+
+解析优先级为显式 font → 当前 withFontFamily 作用域 → Fonts.setDefault → 平台 UI 字体。
+
+```cangjie
+public func effectiveFontFamily(font!: ?String = None): ?String
+```
+
+### withFontFamily
+
+同步字体作用域，支持嵌套并在异常时恢复。录制文字命令会捕获当时的有效族名。
+
+```cangjie
+public func withFontFamily<T>(name: String, body: () -> T): T
+```
+
+### fontMetrics
+
+返回主字体的 ascent、descent、行框和行间推进，均为逻辑像素。
+
+```cangjie
+public func fontMetrics(pointSize!: Float32 = FontSizes.BODY, style!: FontStyle = FontStyle.regular,
+        font!: ?String = None): FontMetrics
+```
+
+### textBounds
+
+返回本次具体字符串相对 text 左上角的保守栅格矩形；空串返回零矩形。包含栅格留白与外伸，不是字形 advance，也不是精确墨迹框。
+
+```cangjie
+public func textBounds(text: String, pointSize!: Float32 = FontSizes.BODY,
+        style!: FontStyle = FontStyle.regular, font!: ?String = None): Rect
+```
+
+### resolveFont
+
+打开并报告本次请求的实际主/fallback 字体、真实/合成样式和失败原因。headless 返回空 faces 与提示。
+
+```cangjie
+public func resolveFont(font!: ?String = None, pointSize!: Float32 = FontSizes.BODY,
+        style!: FontStyle = FontStyle.regular): FontResolution
+```
+
+### fontCacheStats
+
+查看缓存配置数、整段文字纹理数量/字节及累计栅格化次数；重复静态斜体绘制不应持续增加 textRasterizations。
+
+```cangjie
+public func fontCacheStats(): FontCacheStats
+```
+
+### reloadFonts
+
+立即清理本渲染器字体缓存，同时推进全局字体版本。Windows 等锁定文件的平台上，同路径替换前先关闭测量会话，再调用此方法释放缓存字体。
+
+```cangjie
+public func reloadFonts(): Unit
+```
+
+### prepareTextLayout
+
+在帧前布局／命中测量阶段采用即将绘制的实际 DPI／超采样比例，避免字形 hinting 使绘制宽度与布局不同。会提前准备超采样目标（分配失败时采用直接绘制比例），不清空像素、不切换目标。随后以相同逻辑尺寸调用 beginScene／beginRenderPass，并在该 pass 内绘制；endScene 或尺寸变化后重新调用。本方法不用于正在绘制或正在录制命令的回调。Headless 保留显式 setScale 比例。
+
+```cangjie
+public func prepareTextLayout(logicalWidth: Float32, logicalHeight: Float32): Unit
+```
+
+非有限或非正尺寸抛出 IllegalArgumentException；原生比例设置失败抛出 SdlException；录制命令期间调用抛出 IllegalStateException。CUI DesktopApp 已自动调用，应用控件无需自行调用。
+
+### textInkBounds
+
+返回单行文字的字形位图与装饰线边界，相对 text 绘制原点，排除行框留白。边界包含 fallback 字形并共享有预算的度量缓存；空文本／无装饰的空格返回空框。字形位图边缘可能保留少量透明／抗锯齿余量，不代表逐像素阈值扫描；也不是 typographic advance 或 cluster 布局。
+
+```cangjie
+public func textInkBounds(text: String, pointSize!: Float32 = FontSizes.BODY, style!: FontStyle = FontStyle.regular,
+        font!: ?String = None): Rect
+```
+
+真实渲染器从仓颉文字引擎的字形／装饰几何计算边界；Headless 返回保守行框。字体参数、缩放与异常契约和 textBounds 相同。使用官方 SDL3_ttf，无需额外原生扩展。
+
+斜体通过缓存的整段 Surface 纹理绘制，避免 SDL_ttf 3.2.2 Renderer Text Engine 的合成斜体位图拉伸。粗体/斜体优先选择真实样式面；其余文字保留字形图集路径。字号按有效栅格尺寸的 1/256 像素网格归一化；NaN、无穷或超过 65536 的栅格字号被拒绝，非正字号沿用默认 15。字体注册变化会使旧 RenderCommandBuffer 失效，需重新录制。
+
+
+线程绑定使用仓颉运行时 1.0.5 的已导出 ABI。运行时无法绑定（例如其它宿主已经持有绑定）时，在创建 SDL 对象前抛出 `IllegalStateException`；升级工具链需重新验收此契约。窗口关闭会先拒绝后续 wake，再在锁外销毁原生对象并释放绑定；绘图命令录制中调用 close 会先抛错，窗口保持可用。
+
+### textureStyled
+
+按次设置图像着色、透明度、圆角、采样和镜像。使用标准 Alpha 合成，忽略纹理原有颜色／透明度调制，绘制后恢复混合与采样状态。立即绘制与录制均拒绝无效或其他渲染器的纹理，抛出 `SdlException`；矩形坐标或边界非有限、源区域超出纹理时抛出 `IllegalArgumentException`。
+
+```cangjie
+public func textureStyled(texture: Texture, destination: Rect, source!: ?Rect = None,
+        style!: TextureStyle = TextureStyle()): Unit
+```
 
 ## 另请参阅
 

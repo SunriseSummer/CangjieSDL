@@ -116,7 +116,9 @@ public class Texture <: Resource {
         if (closed) {
             return
         }
-        let ownsLiveHandle = owner.isActive() && ownerGeneration == owner.currentGeneration()
+        // Generation changes reject rendering through old wrappers, but the SDL_Texture itself
+        // still belongs to us until explicitly destroyed or the owning renderer is closed.
+        let ownsLiveHandle = owner.isActive()
         if (ownsLiveHandle) {
             owner.ensureAccess("close Texture")
         }
@@ -160,10 +162,10 @@ extend Renderer {
     /**
      * Throws `SdlException` when SDL cannot load the image or create a texture from it.
      */
-    public func loadTexture(path: String): Texture {
+    public func loadTexture(path: String, options!: ImageLoadOptions = ImageLoadOptions()): Texture {
         ensureRenderAccess("load Texture")
         var texture = CPointer<Unit>()
-        try (surface = Surface.load(path)) {
+        try (surface = Surface.load(path, options: options)) {
             texture = unsafe { SDL_CreateTextureFromSurface(ptr, surface.ptr) }
         }
         if (texture.isNull()) {

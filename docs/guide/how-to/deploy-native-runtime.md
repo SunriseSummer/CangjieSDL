@@ -1,60 +1,59 @@
 # 部署 SDL 原生运行库
 
-## 目标
+目标是在不依赖源码目录的环境中启动应用，正确显示文字与图像，并正常关闭。开发时 `cjpm run` 成功，只能证明当前开发环境可用。
 
-基于[平台诊断工具](../tutorials/platform-toolbox.md)，构建 Windows 发布目录，使可执行文件在没有仓库工作目录和全局 DLL 路径的干净位置仍能运行。最终目录包含应用、`SDL3.dll` 与 `SDL3_ttf.dll`，并记录架构、版本、启动命令和退出码。
+## 开发目录与运行目录
 
-## 适用场景
+`CangjieSDL/cjpm.toml` 将 SDL3、SDL3_ttf、SDL3_image 的 FFI 链接目录设为 `.sdl3/`。Windows 的 `libSDL3*.dll` 是构建用名称；发布时必须提供加载器使用的运行时名称。
 
-适用于把桌面工具或游戏交给另一台 Windows 机器、制作压缩包、安装程序或 CI 产物。开发期 `cjpm run` 能找到库，不代表复制出的 exe 能找到；链接阶段的 `libSDL3.dll` 名称与运行时 `SDL3.dll` 也不是同一个用途。macOS/Linux 需要目标平台匹配的动态库与 `[ffi.c]` 配置，本页不假装 Windows 文件可跨平台使用。
+| 用途 | Windows x64 文件 |
+|---|---|
+| 窗口、输入与渲染 | `SDL3.dll` |
+| 字体与文字 | `SDL3_ttf.dll` |
+| 静态图像 | `SDL3_image.dll` |
 
-## 准备工作
+三个库都是当前 `[ffi.c]` 声明的依赖。不要沿用只部署 SDL3 与 SDL3_ttf 的旧清单。仓库版本见[环境要求](../../../README.md#环境要求)；库及应用必须匹配目标架构。
 
-确认 `sdl/cjpm.toml` 的 `[ffi.c]` 指向 `.sdl3`，并检查应用与 DLL 都是 x86_64 Windows 架构。先运行平台探针，再构建 GUI 应用。发布测试使用新建的明确子目录，不修改系统全局 PATH，也不依赖开发机已经安装的 SDL。
+## 建立 Windows 发布目录
 
-## 操作步骤
-
-发布布局应保持简单：
-
-```text
-release/
-├─ app.exe
-├─ SDL3.dll
-└─ SDL3_ttf.dll
-```
-
-构建后把可执行文件和两个运行时 DLL 复制到同一目录。以下 PowerShell 命令中的源路径按真实产物调整；执行前先确认目标是专用发布目录。
+沿用入门教程的同级目录布局，在应用目录运行：
 
 ```powershell
-cjpm build --release
-New-Item -ItemType Directory -Force .\release
-Copy-Item .\target\release\bin\app.exe .\release\
-Copy-Item ..\sdl\.sdl3\SDL3.dll, ..\sdl\.sdl3\SDL3_ttf.dll .\release\
+cjpm build
+New-Item -ItemType Directory -Force target/package | Out-Null
+Copy-Item -LiteralPath target/release/bin/main.exe -Destination target/package/
+$sdlRuntime = (Resolve-Path ../CangjieSDL/.sdl3).Path
+Copy-Item -LiteralPath "$sdlRuntime/SDL3.dll", "$sdlRuntime/SDL3_ttf.dll", "$sdlRuntime/SDL3_image.dll" -Destination target/package/
 ```
 
-在应用启动最前面打印 `sdlVersion()`、`sdlRevision()` 和 `platformName()`，便于用户报告环境。这只能证明程序已经进入仓颉入口并加载相应原生库，不能替代真实窗口和字体测试。
+`main.exe` 是默认产物名，若应用配置改变了输出名，应使用实际构建产物。随后复制程序读取的 `assets/`、配置、字体和许可证，保留应用约定的目录结构。仓颉运行时及原生库的传递依赖也须按所用 SDK、构建方式和目标系统补齐。
 
-复制完成后，从 `release` 目录直接运行，记录标准输出和退出码。GUI 应用还要实际打开窗口、显示文字并关闭，才能同时验证 SDL3、SDL3_ttf、显示环境与字体。
+```text
+target/package/
+├─ main.exe
+├─ SDL3.dll
+├─ SDL3_ttf.dll
+├─ SDL3_image.dll
+├─ assets/           # 应用实际需要的图像、字体等
+└─ licenses/         # 随分发组件的许可证
+```
 
-## 确认结果
+常见静态图像由预置 SDL3_image 处理；WebP、TIFF、AVIF、JPEG XL 的支持取决于构建选项及额外解码库。只交付产品实际需要并验收过的解码器，不能用开发机上的可选库替代发布依赖。
 
-临时移除开发 PATH 中 `.sdl3` 后，发布目录里的程序仍能启动；平台探针退出码为 0，GUI 窗口真实可见，中文正常，关闭后返回。删除测试副本中的任一 DLL 应产生可解释的加载失败，再恢复 DLL 后复测通过。记录三个文件大小与 SHA-256，确保打包过程没有拿错架构或旧版本。
+## 在干净环境验收
 
-## 常见错误
+从发布目录直接启动可执行文件，确认测试环境没有通过开发 `PATH` 或源码目录提供遗漏的库和资源。优先在独立测试机或干净系统镜像中执行。
 
-只复制 `libSDL3.dll` 而缺少运行时名 `SDL3.dll` 会启动失败；只带 SDL3 不带 SDL3_ttf 会在文字后端初始化时失败。依赖开发机全局 PATH 会让测试产生假通过。32/64 位混用通常表现为无法加载而不是仓颉源码错误。精简系统镜像可能没有受支持字体，即使两个 DLL 都存在也要单独验证文字。
+依次检查窗口创建、中文与拉丁文字、一张产品使用格式的图片、输入和正常关闭。需要诊断时记录 `sdlVersion()`、`imageVersion()`、`platformName()`、渲染器 `driverName()` 及实际加载文件的版本与哈希。截图应在场景结束后、`present()` 之前采集，见[图片与截图](images-textures-screenshot.md)。
 
-## 可以继续修改
+加载失败先检查文件名、架构和传递依赖；图片失败再检查编解码器及资源路径；文字失败再检查字体配置。版本函数可运行不等于窗口、字体和 GPU 都可用。
 
-诊断模式还应在成功创建窗口后打印 `window.renderer.driverName()` 和 `window.pixelDensity()`，再显示至少一帧并短暂停留。这样可以区分“动态库已加载”和“窗口、字体及真实渲染器已经建立”。
+## Linux 与 macOS
 
-## 相关 API
+准备目标平台的 SDL3、SDL3_ttf、SDL3_image 共享库及依赖，并使 `[ffi.c]` 能在构建时找到它们。Linux 还需正确配置运行时搜索路径或安装路径；macOS 需处理动态库安装名、运行路径和应用包布局。Windows DLL 不能用于这两个平台。
 
-- [`sdl` 包](../../api/sdl/index.md)：版本函数和核心运行时。
-- [`SdlWindow`](../../api/sdl/SdlWindow.md)：真实窗口与渲染器探针。
-- [`Renderer`](../../api/sdl/Renderer.md)：驱动名和场景提交。
-- [仓库环境要求与部署说明](../../../README.md#环境要求)：原生库版本、仓库布局与发布时动态库搜索边界。
+字体发现分别使用 Linux fontconfig 和 macOS CoreText。窗口系统、输入法、对话框及 GPU 后端应在目标系统验收；本地构建不能代替这些检查。
 
-## 下一步
+使用 CUI 的应用还需考虑 Windows UI Automation 桥，见 [CUI 打包指南](../../../../CangjieGUI/docs/guide/how-to/package-desktop-app.md)。
 
-继续[无窗口测试与渲染计数](test-headless-and-instrument.md)，建立部署前可快速运行的逻辑门禁，同时保留 GUI 截图门禁。
+参见 [`SdlWindow`](../../api/sdl/SdlWindow.md)、[`Renderer`](../../api/sdl/Renderer.md) 和[构建与运行排错](../troubleshooting/build-runtime-fonts.md)。

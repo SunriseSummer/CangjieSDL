@@ -4,19 +4,20 @@ package sdl
 func windowWakeInterruptsTimedEventWait(): Unit {
     let window = SdlWindow(WindowSpec("Event wait test", 160, 120, vsync: false, supersample: 1))
     try {
-        // Queue from a worker and join it before waiting: no timing sleep, and the Future's
-        // completion establishes that SDL_PushEvent finished before the assertion loop.
+        // Keep the bound native event owner pumping while the worker completes; Future.get()
+        // would preserve the binding but suspend input/event handling.
         let worker = spawn {=> window.wake()}
-        @Expect(worker.get())
-
+        var completed: ?Bool = None
         var woke = false
         let deadline = window.ticks() + UInt64(1000)
-        while (!woke && window.ticks() < deadline) {
+        while ((!woke || completed.isNone()) && window.ticks() < deadline) {
             match (window.waitEventTimeout(20)) {
                 case Some(UiEvent.Wake) => woke = true
                 case _ => () // creation/exposure events may precede the explicit wake
             }
+            completed = worker.tryGet()
         }
+        @Expect(completed.getOrDefault({=> false}))
         @Expect(woke)
     } finally {
         window.close()

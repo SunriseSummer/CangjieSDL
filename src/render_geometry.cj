@@ -95,7 +95,7 @@ internal class GeometryBatch {
     // thereafter merely translated and coloured — turning per-frame arc/normal tessellation (the CPU
     // cost that dominates a content page) into a cheap vertex copy.
     // The shared two-generation cache (see GenerationCache) keyed by the packed shape key.
-    private let meshCache = GenerationCache<Int64, CachedMesh>(MESH_CACHE_CAP) {mesh => mesh.free()}
+    private let meshCache = GenerationCache<MeshKey, CachedMesh>(MESH_CACHE_CAP) {mesh => mesh.free()}
 
     func fillRoundedRect(renderer: CPointer<Unit>, rect: Rect, radius: Float32, color: Color): Unit {
         fillRoundedRectSoft(renderer, rect, radius, color, AA_FEATHER)

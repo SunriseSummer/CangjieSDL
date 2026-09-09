@@ -1,11 +1,12 @@
 [package]
 cjc-version = "1.0.5"
 name = "sdl"
-version = "0.6.6"
+version = "0.9.6"
 output-type = "static"
-description = "Safe SDL3 and SDL3_ttf bindings for Cangjie."
+description = "Safe SDL3 bindings for Cangjie."
 compile-option = "-O2"
 
 [ffi.c]
 SDL3 = { path = "./.sdl3" }
 SDL3_ttf = { path = "./.sdl3" }
+SDL3_image = { path = "./.sdl3" }

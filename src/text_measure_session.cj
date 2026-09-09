@@ -105,10 +105,13 @@ public class TextMeasureSession <: Resource {
         result
     }
 
-    /** Releases the owned native UTF-8 buffer; safe to call more than once. */
+    /** Releases native resources on the renderer's owner thread; safe to call more than once. */
     public func close(): Unit {
         if (closed) {
             return
+        }
+        if (owner.isActive()) {
+            owner.ensureAccess("close text measurement session")
         }
         closed = true
         closeImpl()

@@ -1,7 +1,7 @@
 # Neon Commando 教程：组织中型 2D 动作游戏
 
 `Neon Commando` 是一个单关横版动作射击示例。它包含平台、水域、步兵、炮台、无人机、扩散枪补给和
-Boss，但真正值得学习的是：如何把 2500 多行实时游戏代码组织成依赖清晰的 7 个包，并让输入、模拟、
+Boss，但真正值得学习的是：如何把 实时游戏代码组织成依赖清晰的 7 个包，并让输入、模拟、
 骨骼求值、资源管理与分层渲染各自保持明确职责。
 
 ![Neon Commando 运行效果](../.images/contra.png)
@@ -74,6 +74,8 @@ contra（应用外壳：窗口、事件、帧循环）
 | `contra.render` | [`view.cj`](src/render/view.cj)、[`environment.cj`](src/render/environment.cj)、[`actors.cj`](src/render/actors.cj)、[`hero.cj`](src/render/hero.cj)、[`skinning.cj`](src/render/skinning.cj)、[`hud.cj`](src/render/hud.cj)、[`assets.cj`](src/render/assets.cj) | 坐标转换、分层绘制和纹理生命周期 |
 
 ## 第一课：先追踪完整的一帧
+
+窗口工厂 `createWindow()` 使用 `hidden: true`。资源就绪后，`prepareFirstFrame()` 提交完整画面，再 `show()` 并立即重绘；游戏的时间步长基准在此后建立，资源加载时间不会计入第一步模拟。入口与 [startup_test.cj](src/startup_test.cj) 共用工厂和首帧函数。
 
 从 [`runGame`](src/loop.cj) 开始。它计算被限制在 0 到 0.04 秒之间的可变 `dt`，然后依次执行：
 
@@ -244,3 +246,5 @@ HeroSkeleton
 
 修改后先执行 `cjpm build`，再完整走通开始、移动、射击、受击、补给、Boss、结算和重新挑战流程。自动构建
 不能替代骨骼接缝、透明混合、输入手感和不同姿态下的视觉验收。
+
+启动回归：在本例目录执行 `cjpm test --no-progress`。该测试创建原生窗口，需要桌面环境；完整交互仍按本页验收清单执行。

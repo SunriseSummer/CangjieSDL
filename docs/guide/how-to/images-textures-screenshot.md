@@ -1,43 +1,83 @@
 # 加载图片、绘制纹理并保存截图
 
-## 目标
+本页在一个完整程序中完成内存图像解码、纹理上传、跨帧绘制和截图。先掌握[首个窗口](../getting-started/first-window.md)与[资源所有权](../concepts/resource-ownership.md)。
 
-在[首个窗口](../getting-started/first-window.md)上加载 PNG/BMP 图片，创建一次 Texture 并跨帧绘制，退出前保存真实 BMP 截图。完成后能说明 Surface 与 Texture 的关闭顺序，并用文件存在、图片尺寸和人工打开三种证据确认结果。
+## 选择加载入口
 
-## 适用场景
+| 需求 | 入口 |
+|---|---|
+| 直接绘制文件 | `renderer.loadTexture(path, options: ...)` |
+| 读取或修改像素后绘制 | `Surface.load(path)` → `textureFromSurface(surface)` |
+| 从编码字节加载 | `Surface.loadBytes(bytes, typeHint: ...)` → `textureFromSurface(surface)` |
+| 生成图片文件 | `Surface.create`、`writePixel`、`saveBmp`／`savePng`／`saveJpeg` |
 
-适用于应用徽标、游戏精灵、背景图、图集区域、旋转图标和问题复现截图。若需要逐像素生成或检查，先用 Surface；若只需重复绘制文件图片，直接 `loadTexture` 更简洁。大量动态图像不要每帧重新加载。
+`Surface.load` 通过 SDL3_image 按内容识别格式；无文件签名的格式可能需要扩展名或 `typeHint`，如 TGA。格式支持取决于原生库构建，当前接口只解码静态图像。
 
-## 准备工作
+## 完整程序
 
-先阅读[Surface、Texture 与图片](../concepts/surface-texture-image.md)。准备一张合法 `badge.png`，放在示例运行目录可访问的位置。窗口的 `try (...)` 是外层资源块，纹理资源块包住事件与渲染循环，因此退出时会先关闭纹理、再关闭窗口。
+以下 SVG 字节直接包含在程序中，无需外部素材。按 S 保存 `window-capture.bmp` 到当前工作目录。
 
-## 操作步骤
+```cangjie verify role=complete profile=gui-visual
+package docexample
 
-在创建窗口之后、进入循环之前调用 `window.renderer.loadTexture("badge.png")`，并让纹理资源块包住整个事件和渲染循环。每帧用逻辑目标矩形调用 `texture`；需要截图时，在完整场景提交后只调用一次 `captureBmp("window-capture.bmp")`，避免每帧覆盖同一文件。
+import sdl.*
 
-若要先检查像素或生成图片，使用 `try (surface = Surface.load(...))`，再 `textureFromSurface(surface)`。上传后若不再读 CPU 像素，可立即离开 Surface 资源块，只让 Texture 跨帧存在。
+main(): Unit {
+    let bytes = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"160\" height=\"100\"><rect width=\"160\" height=\"100\" rx=\"12\" fill=\"#287d93\"/><circle cx=\"80\" cy=\"50\" r=\"30\" fill=\"#f2cc78\"/></svg>".toArray()
+    try (window = SdlWindow(WindowSpec("图片与截图", 480, 320), hidden: true)) {
+        let renderer = window.renderer
+        try (surface = Surface.loadBytes(bytes, typeHint: "SVG", options: ImageLoadOptions(width: 640))) {
+            try (texture = renderer.textureFromSurface(surface)) {
+                var running = true
+                var firstFrame = true
+                var capture = false
+                while (running) {
+                    while (let Some(event) <- window.pollEvent()) {
+                        match (event) {
+                            case UiEvent.Quit | UiEvent.WindowCloseRequested => running = false
+                            case UiEvent.KeyDown(Key.Letter(code), _) where code == UInt8(83) => capture = true
+                            case _ => ()
+                        }
+                    }
+                    if (!running) { break }
+                    try (pass = renderer.beginRenderPass(Float32(window.width), Float32(window.height),
+                            Color.rgb(24, 30, 40))) {
+                        renderer.textureStyled(texture, Rect(80.0, 50.0, 320.0, 200.0),
+                            style: TextureStyle(opacity: 0.9, radius: 16.0))
+                        renderer.text("按 S 保存截图", 80.0, 270.0, Color.rgb(240, 240, 240))
+                    }
+                    if (capture) {
+                        renderer.captureBmp("window-capture.bmp")
+                        capture = false
+                    }
+                    renderer.present()
+                    if (firstFrame) {
+                        window.show()
+                        firstFrame = false
+                        continue
+                    }
+                    window.delay(UInt32(8))
+                }
+            }
+        }
+    }
+}
+```
 
-## 确认结果
+窗口是最外层资源；纹理先于表面和窗口关闭。示例为清楚展示嵌套关系而保留 Surface；上传后不再读取 CPU 像素的应用可以更早关闭它。帧循环只绘制已有纹理，不重复解码。
 
-窗口中图片应保持正确宽高比例、透明区域不出现黑底，移动或缩放窗口后仍可见。触发截图后，`window-capture.bmp` 必须存在、大小大于 BMP 头部，并能被图片查看器打开；记录像素尺寸和 SHA-256。截图中的背景、图片和文字应与窗口一致。关闭窗口后进程退出码为 0，文件没有继续被占用。若只编译通过但没打开图片，不算视觉验证完成。
+## 显示尺寸与解码尺寸
 
-## 常见错误
+目标 `Rect` 使用逻辑像素，`ImageLoadOptions` 使用解码像素。`width`、`height` 为零表示该轴不受限；非零值限制尺寸并保持比例。
 
-把 `loadTexture` 放在帧循环内会重复解码和分配；Texture 由另一个窗口的 Renderer 创建时不能直接共享。目标 Rect 宽高为零或负数会得到不可见结果；源图片太小再放大容易模糊。截图在 `beginScene` 中途执行可能记录不完整帧，应在场景结束和提交后按明确时机调用。关闭纹理后仍绘制会抛出资源状态错误。
+位图先完整解码，再按比例缩小；SVG 可直接按请求尺寸栅格化。`maxPixels` 在解码后、位图缩小前检查，不能限制解码器的临时分配。因此请求很小的缩略图，也可能因原图超过预算而失败。参数非法抛出 `IllegalArgumentException`；解码、资源或像素预算失败抛出 `SdlException`。
 
-## 可以继续修改
+`TextureStyle` 为一次绘制提供着色、透明度、圆角、采样和镜像。它使用独立的标准 Alpha 合成，并在绘制后恢复纹理混合与采样状态。需要图集或旋转时，另查 `textureStyled` 的 `source` 及 `textureRotated`／`TextureRenderOptions`。
 
-用 `TextureRenderOptions` 把源区域设为图集中的 64×64 矩形，旋转中心设为 96×96 目标矩形的中心，并选择 `TextureFlip.Horizontal`；随后用 `textureRotated` 绘制。这样可以同时验证图集裁剪、旋转中心和水平翻转。
+## 截图时机与验收
 
-## 相关 API
+`captureBmp` 读回当前渲染目标。完整窗口截图的顺序是：结束 `RenderPass` → `captureBmp` → `present`。在场景内部截图可能得到超采样中间目标；提交后后备缓冲内容不应再作为截图依据。`renderFrame` 已包含 `present`，需要这个中间步骤时使用显式 `RenderPass`。
 
-- [`Surface`](../../api/sdl/Surface.md)：加载、像素读写和 BMP 保存。
-- [`Texture`](../../api/sdl/Texture.md)：纹理属性与资源状态。
-- [`TextureRenderOptions`](../../api/sdl/TextureRenderOptions.md)：源区域、中心和翻转。
-- [`Renderer`](../../api/sdl/Renderer.md)：纹理绘制与 `captureBmp`。
-- [`ImageFileFormat`](../../api/sdl/ImageFileFormat.md)：Surface 文件格式选择。
+运行后检查图形比例、圆角、透明度及缩放效果；按 S 后打开 BMP，确认尺寸和画面。headless 模式下 `captureBmp` 是空操作，不产生文件。保存失败还应检查输出目录与权限。
 
-## 下一步
-
-继续[输入、光标与拖放](input-cursor-drop.md)，让用户能拖入图片、选择光标并触发截图。
+继续阅读[输入、光标与拖放](input-cursor-drop.md)，接入用户图片。精确接口见 [`Surface`](../../api/sdl/Surface.md)、[`ImageLoadOptions`](../../api/sdl/ImageLoadOptions.md)、[`TextureStyle`](../../api/sdl/TextureStyle.md) 与 [`Renderer`](../../api/sdl/Renderer.md)。

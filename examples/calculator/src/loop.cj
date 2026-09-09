@@ -7,6 +7,10 @@ import sdl.UiEvent
 
 func runCalculator(window: SdlWindow): Unit {
     let state = CalcState()
+    prepareFirstFrame(window, state)
+    window.show()
+    // Showing a native window may invalidate its backbuffer; redraw before processing input.
+    draw(window.renderer, state)
 
     while (state.isRunning) {
         var event = window.pollEvent()
@@ -65,4 +69,9 @@ func labelForRune(ch: Rune): ?String {
         // 其他字符不是计算器按键，忽略
         case _ => None
     }
+}
+
+// Keep resource preparation and the first complete presentation inside the hidden phase.
+func prepareFirstFrame(window: SdlWindow, state: CalcState): Unit {
+    draw(window.renderer, state)
 }

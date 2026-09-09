@@ -1,17 +1,11 @@
 package sdl
 
 import std.collection.{ArrayList, HashMap}
-import sdl.text.{NativeFontFamily, NativeTextColor, NativeTextException, NativeTextMetrics, NativeTextRenderer}
+import sdl.text.{NativeFontFamily, NativeTextColor, NativeTextException, NativeTextMetrics, NativeTextRenderer,
+    normalizeFontPointSize}
 
 /* 0 selects a physical-density-aware factor; positive requests remain exact compatibility knobs. */
 private let DEFAULT_SUPERSAMPLE_REQUEST: Int32 = 0
-
-/*
- * Cap on distinct cached rotated-text rasterizations. Rotated text is axis titles — a handful of
- * static strings per figure — so the cache stays tiny and clears wholesale when it fills rather
- * than paying for recency tracking.
- */
-private let TEXT_TEXTURE_CACHE_CAP: Int64 = 64
 
 private func nextBatchCapacity(current: Int64, required: Int64): Int64 {
     var capacity = max(Int64(16), current)
@@ -33,11 +27,12 @@ private func nextBatchCapacity(current: Int64, required: Int64): Int64 {
  */
 public class Renderer {
     internal let ptr: CPointer<Unit>
-    private let device = RenderDeviceToken()
+    private let device: RenderDeviceToken
     private var contentScale: Float32
     private var ssTarget: CPointer<Unit> = CPointer<Unit>()
     private var ssWidth: Int32 = 0
     private var ssHeight: Int32 = 0
+    private var ssInitialized = false
     // The request is stable; Auto may change the effective factor after a display-density move.
     private let supersampleRequest: Int32
     private let maxTextureSize: Int32
@@ -55,6 +50,7 @@ public class Renderer {
     private var scaleX: Float32 = 1.0
     private var scaleY: Float32 = 1.0
     private let geometry = GeometryBatch()
+    private var imageGeometry: ?ImageGeometry = None
     private let textBackend: ?NativeTextRenderer
     private let clipStack = ArrayList<Rect>()
     // Counts text measurements since the last reset — a per-frame cost probe. Text measurement is a
@@ -71,9 +67,12 @@ public class Renderer {
     // named font's measurements never collide with the default font's cache. The default face uses
     // `metricsCache` directly and stays on the untouched hot path.
     private let namedMetricsCaches = HashMap<String, TextMetricsCache>()
-    // White rasterizations of rotated-text strings, keyed by face/style/effective-size/text.
+    private var metricsCacheClock: UInt64 = UInt64(0)
+    // Color-preserving text rasters, keyed by face/style/effective-size/text/RGB.
     // Colour is applied per draw as a texture colour mod, so one entry serves every colour.
-    private let textTextureCache = HashMap<String, Texture>()
+    private let textTextureCache = TextRasterCache()
+    private var scopedFontFamily: ?String = None
+    private let resolvedFontFamilies = HashMap<String, NativeFontFamily>()
     // A display-list recording is renderer-local and synchronous. Drawing entry points append value
     // commands while active; frame/device control APIs reject recording rather than mutate SDL.
     private var activeCommandRecorder: ?RenderCommandRecorder = None
@@ -92,6 +91,7 @@ public class Renderer {
         supersample!: Int32 = DEFAULT_SUPERSAMPLE_REQUEST
     ) {
         this.ptr = ptr
+        this.device = RenderDeviceToken(native: ptr.isNotNull())
         this.contentScale = contentScale
         this.supersampleRequest = supersample
         this.maxTextureSize = rendererMaxTextureSize(ptr)
@@ -122,11 +122,13 @@ public class Renderer {
      */
     public func recordCommands(body: () -> Unit): RenderCommandBuffer {
         ensureRenderAccess("record render commands")
+        synchronizeFontRegistry()
         let previous = activeCommandRecorder
         let recorder = RenderCommandRecorder(currentClipUnchecked())
         activeCommandRecorder = Some(recorder)
         try {
             body()
+            synchronizeFontRegistry()
             recorder.finish(this, commandEpoch)
         } finally {
             activeCommandRecorder = previous
@@ -155,6 +157,7 @@ public class Renderer {
     }
 
     internal func renderCommandEpoch(): UInt64 {
+        synchronizeFontRegistry()
         commandEpoch
     }
 
@@ -164,6 +167,12 @@ public class Renderer {
 
     internal func ensureRenderAccess(operation: String): Unit {
         device.ensureAccess(operation)
+    }
+
+    // Reject illegal teardown before the window marks itself closed or destroys native objects.
+    internal func ensureWindowCloseAllowed(): Unit {
+        device.ensureOwner("close SdlWindow")
+        rejectDuringCommandRecording("close SdlWindow")
     }
 
     internal func updateContentScale(scale: Float32): Unit {
@@ -248,6 +257,7 @@ public class Renderer {
             }
             ssWidth = 0
             ssHeight = 0
+            ssInitialized = false
         }
         if (targetChanged && (plan.targetWidth != failedTargetWidth || plan.targetHeight != failedTargetHeight)) {
             failedTargetWidth = 0
@@ -278,16 +288,23 @@ public class Renderer {
     internal func noteRenderReset(): Unit {
         ensureRenderAccess("handle Renderer reset")
         advanceCommandEpoch()
+        // Reset invalidates texture contents, not their wrapper ownership. Release owned handles
+        // before advancing the generation, including both glyph and whole-run text caches.
+        clearTextTextureCache()
+        if (let Some(backend) <- textBackend) {
+            backend.invalidateGlyphAtlas()
+        }
+        if (ssTarget.isNotNull()) {
+            unsafe { SDL_DestroyTexture(ssTarget) }
+        }
         device.advanceGeneration()
-        // SDL reset events invalidate target contents or texture resources. The native backend owns
-        // their post-reset disposal; dropping pointers prevents wrapper-side double destruction.
         ssTarget = CPointer<Unit>()
         ssWidth = 0
         ssHeight = 0
+        ssInitialized = false
         failedTargetWidth = 0
         failedTargetHeight = 0
         ssEnabled = ptr.isNotNull() && ssFactor > Int32(1)
-        textTextureCache.clear()
     }
 
     internal func captureCommandClipStack(): Array<Rect> {
@@ -403,6 +420,7 @@ public class Renderer {
         // or the clear itself (and everything before the first push) would stay clipped.
         resetClip()
         clearTarget(clearColor)
+        ssInitialized = true
     }
 
     /**
@@ -431,9 +449,17 @@ public class Renderer {
         if (!prepareDamageTarget(logicalWidth, logicalHeight, clearColor)) {
             return false
         }
-        pushClip(clipped)
-        fill(clipped, clearColor)
-        true
+        // SDL scissors use integer logical coordinates. Clear the complete scissor, and expose
+        // that same conservative extent to scene culling and the physical-pixel text pass.
+        match (alignedDamageClip(clipped, scaleX, scaleY)) {
+            case Some(region) =>
+                pushClip(region)
+                fill(region, clearColor)
+                true
+            case None =>
+                beginScene(logicalWidth, logicalHeight, clearColor)
+                false
+        }
     }
 
     private func prepareDamageTarget(logicalWidth: Float32, logicalHeight: Float32, clearColor: Color): Bool {
@@ -451,8 +477,9 @@ public class Renderer {
         }
         let targetWidth = plannedTargetWidth
         let targetHeight = plannedTargetHeight
-        let canPreserve = ssTarget.isNotNull() && targetWidth == ssWidth && targetHeight == ssHeight
-        if (!canPreserve) {
+        let targetMatches = ssTarget.isNotNull() && targetWidth == ssWidth && targetHeight == ssHeight
+        let canPreserve = targetMatches && ssInitialized
+        if (!targetMatches) {
             allocateTarget(targetWidth, targetHeight)
         }
         if (!ssEnabled || ssTarget.isNull()) {
@@ -468,6 +495,7 @@ public class Renderer {
         resetClip()
         if (!canPreserve) {
             clearTarget(clearColor)
+            ssInitialized = true
             return false
         }
         true
@@ -524,24 +552,35 @@ public class Renderer {
      * close, just before destroying the SDL renderer; safe to call more than once.
      */
     internal func releaseResources(): Unit {
-        ensureRenderAccess("release Renderer resources")
+        device.ensureOwner("release Renderer resources")
+        if (!device.isActive()) {
+            return
+        }
         rejectDuringCommandRecording("releaseResources")
-        advanceCommandEpoch()
-        if (ssTarget.isNotNull()) {
-            unsafe { SDL_DestroyTexture(ssTarget) }
-            ssTarget = CPointer<Unit>()
+        try {
+            advanceCommandEpoch()
+            if (ssTarget.isNotNull()) {
+                unsafe { SDL_DestroyTexture(ssTarget) }
+                ssTarget = CPointer<Unit>()
+            }
+            clearTextTextureCache()
+            match (textBackend) {
+                case Some(value) => value.close()
+                case None => ()
+            }
+            geometry.dispose()
+            if (let Some(painter) <- imageGeometry) {
+                painter.close()
+            }
+            imageGeometry = None
+            releasePrimitiveBatchScratch()
+        } finally {
+            device.invalidate()
         }
-        clearTextTextureCache()
-        match (textBackend) {
-            case Some(value) => value.close()
-            case None => ()
-        }
-        geometry.dispose()
-        releasePrimitiveBatchScratch()
-        device.invalidate()
     }
 
     private func allocateTarget(width: Int32, height: Int32): Unit {
+        ssInitialized = false
         if (ssTarget.isNotNull()) {
             unsafe { SDL_DestroyTexture(ssTarget) }
             ssTarget = CPointer<Unit>()
@@ -778,8 +817,10 @@ public class Renderer {
             case Some(top) => top.intersection(rect)
             case None => rect
         }
+        if (ptr.isNotNull()) {
+            setClip(effective)
+        }
         clipStack.add(effective)
-        applyClip()
     }
 
     /** Restores the clip that was active before the matching `pushClip`. */
@@ -791,10 +832,16 @@ public class Renderer {
                 return
             case None => ()
         }
+        if (ptr.isNotNull()) {
+            if (clipStack.size > 1) {
+                setClip(clipStack[clipStack.size - 2])
+            } else {
+                resetClip()
+            }
+        }
         if (!clipStack.isEmpty()) {
             clipStack.remove(at: clipStack.size - 1)
         }
-        applyClip()
     }
 
     /** The clip in effect right now, or `None` when drawing is unclipped. */
@@ -826,7 +873,7 @@ public class Renderer {
     }
 
     private func setClip(rect: Rect): Unit {
-        var raw = rect.toSdlRect()
+        var raw = enclosingSdlClipRect(rect)
         ensureSdl(unsafe { SDL_SetRenderClipRect(ptr, inout raw) }, "SDL_SetRenderClipRect")
     }
 
@@ -1234,6 +1281,45 @@ public class Renderer {
     }
 
     /**
+     * Paints a static image with per-draw tint, opacity, rounded corners, filtering and mirroring.
+     * The style uses standard alpha blending and ignores texture color/alpha modulation. Blend
+     * and sampling state are restored after drawing. Recording rejects invalid/foreign textures
+     * with `SdlException`, just like immediate drawing. `IllegalArgumentException` rejects
+     * non-finite rectangle coordinates/edges or a source outside the texture.
+     */
+    public func textureStyled(texture: Texture, destination: Rect, source!: ?Rect = None,
+        style!: TextureStyle = TextureStyle()): Unit {
+        ensureRenderAccess("draw styled texture")
+        validateImageRect(destination)
+        let pixels = match (source) {
+            case Some(value) => value
+            case None => Rect(0.0, 0.0, texture.width, texture.height)
+        }
+        validateImageRect(pixels)
+        if (pixels.x < 0.0 || pixels.y < 0.0 || pixels.w < 0.0 || pixels.h < 0.0 || pixels.right() > texture.width ||
+            pixels.bottom() > texture.height) {
+            throw IllegalArgumentException("Image source rectangle must lie inside the texture")
+        }
+        if (texture.isClosed() || !texture.isOwnedBy(this)) {
+            throw SdlException("Cannot render a closed texture or a texture from another renderer")
+        }
+        if (recordRenderCommand(RenderCommand.DrawStyledTexture(texture, destination, pixels, style))) {
+            return
+        }
+        if (destination.w <= 0.0 || destination.h <= 0.0 || pixels.w == 0.0 || pixels.h == 0.0 || style.opacity == 0.0) {
+            return
+        }
+        let painter = match (imageGeometry) {
+            case Some(value) => value
+            case None =>
+                let value = ImageGeometry()
+                imageGeometry = Some(value)
+                value
+        }
+        painter.draw(ptr, texture, destination, pixels, style)
+    }
+
+    /**
      * Draws UTF-8 text with the platform UI font through SDL3_ttf.
      *
      * Text takes a dedicated path through the render scale: glyphs are rasterized by
@@ -1254,7 +1340,8 @@ public class Renderer {
         style!: FontStyle = FontStyle.regular,
         font!: ?String = None
     ): Unit {
-        if (recordRenderCommand(RenderCommand.DrawText(text, x, y, color, pointSize, style, font))) {
+        if (recordRenderCommand(RenderCommand.DrawText(text, x, y, color, pointSize, style,
+            effectiveFontFamily(font: font)))) {
             return
         }
         drawTextCount += 1
@@ -1262,7 +1349,13 @@ public class Renderer {
             case Some(value) =>
                 let native = NativeTextColor(color.r, color.g, color.b, color.a)
                 let flags = style.ttfFlags()
-                let family = resolveFontFamily(font)
+                let family = resolveFontFamily(font, style)
+                // SDL_ttf's renderer atlas can stretch synthetic italic bitmaps to estimated
+                // glyph widths. Whole-run rasterization preserves shaping and the actual ink.
+                if (style.italic) {
+                    drawTextRaster(value, text, Point(x, y), color, pointSize, style, family)
+                    return
+                }
                 if (scaleX == 1.0 && scaleY == 1.0) {
                     value.draw(text, snapPixel(x, 1.0), snapPixel(y, 1.0), pointSize, flags, family, native)
                     return
@@ -1296,7 +1389,7 @@ public class Renderer {
         font!: ?String = None
     ): Float32 {
         ensureRenderAccess("measure text")
-        textMetrics(text, pointSize, style, resolveFontFamily(font)).width
+        textMetrics(text, pointSize, style, resolveFontFamily(font, style)).width
     }
 
     /**
@@ -1308,7 +1401,86 @@ public class Renderer {
         font!: ?String = None
     ): Float32 {
         ensureRenderAccess("measure text")
-        textMetrics("国Ag", pointSize, style, resolveFontFamily(font)).height
+        textMetrics("国Ag", pointSize, style, resolveFontFamily(font, style)).height
+    }
+
+    /** Primary-face ascent/descent and line spacing, using the actual current raster size. */
+    public func fontMetrics(pointSize!: Float32 = FontSizes.BODY, style!: FontStyle = FontStyle.regular,
+        font!: ?String = None): FontMetrics {
+        ensureRenderAccess("measure font metrics")
+        let family = resolveFontFamily(font, style)
+        let effectiveSize = normalizeFontPointSize(pointSize * scaleY)
+        match (textBackend) {
+            case Some(backend) =>
+                let metrics = backend.lineMetrics(effectiveSize, style.ttfFlags(), family)
+                FontMetrics(metrics.ascent / scaleY, metrics.descent / scaleY, metrics.height / scaleY,
+                    metrics.lineSkip / scaleY)
+            case None =>
+                let size = effectiveSize / scaleY
+                FontMetrics(size, size * 0.3, size * 1.3, size * 1.3)
+        }
+    }
+
+    /**
+     * Conservative raster rectangle relative to the top-left `text` origin, for this exact string.
+     * Includes raster padding and overhang; this is not a typographic advance or a tight ink box.
+     */
+    public func textBounds(text: String, pointSize!: Float32 = FontSizes.BODY, style!: FontStyle = FontStyle.regular,
+        font!: ?String = None): Rect {
+        ensureRenderAccess("measure text bounds")
+        if (text.isEmpty()) {
+            return Rect.zero()
+        }
+        let metrics = textMetrics(text, pointSize, style, resolveFontFamily(font, style))
+        Rect(0.0, 0.0, metrics.width, metrics.height)
+    }
+
+    /**
+     * Glyph bitmap and decoration bounds relative to the text origin, excluding line-box whitespace.
+     * Shares the bounded metrics cache. Older SDL_ttf libraries and headless renderers return the
+     * conservative textBounds rectangle. This is not a typographic advance or a cluster layout.
+     */
+    public func textInkBounds(text: String, pointSize!: Float32 = FontSizes.BODY, style!: FontStyle = FontStyle.regular,
+        font!: ?String = None): Rect {
+        ensureRenderAccess("measure text ink bounds")
+        if (text.isEmpty()) {
+            return Rect.zero()
+        }
+        let metrics = textMetrics(text, pointSize, style, resolveFontFamily(font, style))
+        Rect(metrics.inkX, metrics.inkY, metrics.inkWidth, metrics.inkHeight)
+    }
+
+    /** Resolves and opens a font request, reporting real faces, synthetic styles and load failures. */
+    public func resolveFont(font!: ?String = None, pointSize!: Float32 = FontSizes.BODY,
+        style!: FontStyle = FontStyle.regular): FontResolution {
+        ensureRenderAccess("inspect font resolution")
+        let requested = effectiveFontFamily(font: font)
+        let family = resolveFontFamily(font, style)
+        match (textBackend) {
+            case Some(backend) =>
+                let resolved = backend.resolve(normalizeFontPointSize(pointSize * scaleY), style.ttfFlags(), family)
+                let faces = Array<ResolvedFontFace>(resolved.faces.size) {
+                    i =>
+                        let face = resolved.faces[i]
+                        let flags = face.synthesizedFlags
+                        ResolvedFontFace(publicFontSource(face.source), face.familyName, face.styleName,
+                            FontStyle(bold: (flags & 1) != 0, italic: (flags & 2) != 0, underline: (flags & 4) != 0,
+                                strikethrough: (flags & 8) != 0), weight: FontWeight(max(1, min(1000, face.weight))))
+                }
+                let warnings = ArrayList<String>(resolved.warnings)
+                if (let Some(name) <- requested) {
+                    if (Fonts.resolveFamily(name).isNone()) {
+                        warnings.add("Unknown font family '${name}'; using platform UI font")
+                    }
+                }
+                if (!faces.isEmpty() && faces[0].weight != style.weight) {
+                    warnings.add(
+                        "Requested weight ${style.weight.value}; selected face weight ${faces[0].weight.value}")
+                }
+                FontResolution(requested, faces, warnings.toArray(), requestedWeight: style.weight)
+            case None => FontResolution(requested, [], ["Headless renderer uses estimated font metrics"],
+                requestedWeight: style.weight)
+        }
     }
 
     /**
@@ -1325,7 +1497,7 @@ public class Renderer {
         font!: ?String = None
     ): TextMeasureSession {
         ensureRenderAccess("create text measurement session")
-        let family = resolveFontFamily(font)
+        let family = resolveFontFamily(font, style)
         let logicalScaleX = scaleX
         let logicalScaleY = scaleY
         let flags = style.ttfFlags()
@@ -1374,7 +1546,9 @@ public class Renderer {
     }
 
     private func headlessMeasureSession(text: String, pointSize: Float32, style: FontStyle): TextMeasureSession {
-        let unitWidth = headlessTextUnitWidth(pointSize, style)
+        let effective = normalizeFontPointSize(pointSize * scaleY)
+        let unitWidth = headlessTextUnitWidth(effective, style) / scaleX
+        let lineHeight = effective / scaleY * 1.3
         TextMeasureSession(
             text,
             device,
@@ -1390,7 +1564,7 @@ public class Renderer {
                     computeCount += 1
                     Float32(length) * unitWidth
             },
-            {x, _ => headlessTextHit(text, x, unitWidth, pointSize)},
+            {x, _ => headlessTextHit(text, x, unitWidth, lineHeight / 1.3)},
             {=> ()}
         )
     }
@@ -1407,9 +1581,9 @@ public class Renderer {
         font!: ?String = None
     ): Unit {
         ensureRenderAccess("draw centered text")
-        let metrics = textMetrics(text, pointSize, style, resolveFontFamily(font))
-        let tx = rect.centerX() - metrics.width / 2.0
-        let ty = rect.centerY() - metrics.height / 2.0
+        let bounds = textInkBounds(text, pointSize: pointSize, style: style, font: font)
+        let tx = rect.centerX() - bounds.w / 2.0 - bounds.x
+        let ty = rect.centerY() - bounds.h / 2.0 - bounds.y
         this.text(text, tx, ty, color, pointSize: pointSize, style: style, font: font)
     }
 
@@ -1419,13 +1593,13 @@ public class Renderer {
      *
      * The straight-text path (`text`) draws through the SDL_ttf text engine, which rasterizes
      * glyphs directly onto the render target and cannot rotate them. This path instead rasterizes
-     * the whole string once into a texture (TTF_RenderText_Blended) and draws it through the
+     * the whole shaped string once into a texture and draws it through the
      * rotating texture pipeline. Glyphs are rasterized at the EFFECTIVE pixel size (`pointSize`
      * times the live render scale), so under supersampling the texture maps 1:1 onto physical
      * pixels — as sharp as straight text, not an upscale.
      *
-     * Rasterizations are cached across frames (keyed by text, size, style, face, and scale;
-     * colour is applied per draw as a colour mod), so a static rotated label costs one
+     * Rasterizations are cached across frames (keyed by text, size, style, face, scale and RGB;
+     * alpha is applied per draw), preserving color glyphs. A static rotated label costs one
      * rasterization, not one per frame. Headless renderers and empty text no-op.
      */
     public func textRotated( // cjcheck-ignore: param-count # public fluent API: 5 positional + 3 named-with-default params is the binding's established text signature shape
@@ -1439,7 +1613,8 @@ public class Renderer {
         font!: ?String = None
     ): Unit {
         if (recordRenderCommand(
-            RenderCommand.DrawTextRotated(text, centerX, centerY, angleDegrees, color, pointSize, style, font))) {
+            RenderCommand.DrawTextRotated(text, centerX, centerY, angleDegrees, color, pointSize, style,
+                effectiveFontFamily(font: font)))) {
             return
         }
         if (ptr.isNull() || text.isEmpty()) {
@@ -1449,32 +1624,56 @@ public class Renderer {
             case Some(value) => value
             case None => return
         }
-        let texture = match (rotatedTextTexture(backend, text, pointSize, style, resolveFontFamily(font))) {
+        let raster = match (rotatedTextTexture(backend, text, pointSize, style, resolveFontFamily(font, style), color)) {
             case Some(value) => value
             case None => return
         }
-        // The cached texture is white glyphs on transparency; the draw colour rides in as a
-        // colour mod, which the texture pipeline honours (unlike the geometry batch).
-        texture.setColorMod(color)
-        texture.setAlpha(Int64(color.a))
-        let width = texture.width / scaleX
-        let height = texture.height / scaleY
-        // Snap the centre to a physical pixel so an axis-aligned (±90°) label lands on the grid
-        // instead of being smeared across two columns by the linear filter.
-        let cx = snapPixel(centerX * scaleX, 1.0) / scaleX
-        let cy = snapPixel(centerY * scaleY, 1.0) / scaleY
-        // The rotating draw itself lives in the texture extension (`textureRotated`); calling
-        // SDL directly here keeps the class body independent of its own extensions, which the
-        // compiler does not resolve from inside the declaration.
-        var dst = Rect(cx - width / 2.0, cy - height / 2.0, width, height).toSdlFRect()
-        ensureSdl(unsafe {
-            SDL_RenderTextureRotated(ptr, texture.ptr, CPointer<SdlFRect>(), inout dst, angleDegrees,
-                CPointer<SdlFPoint>(), 0)
-        }, "SDL_RenderTextureRotated")
+        try (resource = raster) {
+            let image = resource.image
+            let width = image.layoutSize.w / scaleX
+            let height = image.layoutSize.h / scaleY
+            let cx = snapPixel(centerX * scaleX, 1.0) / scaleX
+            let cy = snapPixel(centerY * scaleY, 1.0) / scaleY
+            image.draw(ptr, Point(cx - width / 2.0, cy - height / 2.0), Size(scaleX, scaleY), color, angle: angleDegrees)
+        }
+    }
+
+    private func drawTextRaster(
+        backend: NativeTextRenderer,
+        text: String,
+        position: Point,
+        color: Color,
+        pointSize: Float32,
+        style: FontStyle,
+        family: NativeFontFamily
+    ): Unit {
+        if (text.isEmpty()) {
+            return
+        }
+        let raster = match (rotatedTextTexture(backend, text, pointSize, style, family, color)) {
+            case Some(value) => value
+            case None => return
+        }
+        try (resource = raster) {
+            let step: Float32 = if (ssEnabled) {
+                Float32(ssFactor)
+            } else {
+                1.0
+            }
+            let origin = Point(snapPixel(position.x * scaleX, step), snapPixel(position.y * scaleY, step))
+            ensureSdl(unsafe { SDL_SetRenderScale(ptr, 1.0, 1.0) }, "SDL_SetRenderScale")
+            try {
+                applyClipForTextPass()
+                resource.image.draw(ptr, origin, Size(1.0, 1.0), color)
+            } finally {
+                ensureSdl(unsafe { SDL_SetRenderScale(ptr, scaleX, scaleY) }, "SDL_SetRenderScale")
+                applyClip()
+            }
+        }
     }
 
     /*
-     * The cached white rasterization of a string at the current render scale. The effective size
+     * The cached color-preserving rasterization at the current render scale. The effective size
      * lives in the key, so the same label rasterized inside a supersampled scene and outside one
      * are distinct entries and each draws 1:1 on its own pixel grid.
      */
@@ -1483,39 +1682,146 @@ public class Renderer {
         text: String,
         pointSize: Float32,
         style: FontStyle,
-        family: NativeFontFamily
-    ): ?Texture {
-        let effectiveSize = pointSize * scaleY
-        let key = "${family.cacheKey}|${style.ttfFlags()}|${Int64(effectiveSize * 256.0)}|${text}"
+        family: NativeFontFamily,
+        color: Color
+    ): ?TextRaster {
+        let effectiveSize = normalizeFontPointSize(pointSize * scaleY)
+        let rgb = (UInt32(color.r) << 16) | (UInt32(color.g) << 8) | UInt32(color.b)
+        let key = TextRasterKey(family.cacheKey, style.ttfFlags(), effectiveSize.toBits(), text, rgb: rgb)
+        let tintKey = TextRasterKey(family.cacheKey, style.ttfFlags(), effectiveSize.toBits(), text)
         match (textTextureCache.get(key)) {
             case Some(cached) => return Some(cached)
             case None => ()
         }
-        let surface = backend.renderSurface(text, effectiveSize, style.ttfFlags(), family)
+        if (key != tintKey) {
+            if (let Some(cached) <- textTextureCache.get(tintKey)) {
+                if (cached.image.canTint()) {
+                    return Some(cached)
+                }
+                cached.close()
+            }
+        }
+        let raster = backend.renderColorSurface(text, effectiveSize, style.ttfFlags(), family,
+            NativeTextColor(color.r, color.g, color.b, 255))
+        let surface = raster.pointer;
+        let colorBaked = raster.colorBaked
         if (surface.isNull()) {
             return None
         }
-        let raw = unsafe { SDL_CreateTextureFromSurface(ptr, surface) }
-        unsafe { SDL_DestroySurface(surface) }
-        if (raw.isNull()) {
-            return None
+        let pixels = Surface(surface)
+        try {
+            let image = createTextRasterImage(ptr, device, pixels.ptr, maxTextureSize, colorBaked: colorBaked,
+                offset: Point(Float32(raster.x), Float32(raster.y)), layoutSize: Some(Size(raster.width, raster.height)))
+            try {
+                return Some(textTextureCache.put(if (colorBaked) {
+                    key
+                } else {
+                    tintKey
+                }, image))
+            } catch (error: Exception) {
+                image.close()
+                throw error
+            }
+        } finally {
+            pixels.close()
         }
-        let texture = Texture(raw, device)
-        texture.setBlendMode(TextureBlendMode.Blend)
-        // Wholesale clear on overflow: the population is a handful of axis titles, and clearing
-        // it costs one re-rasterization each — cheaper than tracking recency ever gets.
-        if (textTextureCache.size >= TEXT_TEXTURE_CACHE_CAP) {
-            clearTextTextureCache()
-        }
-        textTextureCache[key] = texture
-        Some(texture)
     }
 
     private func clearTextTextureCache(): Unit {
-        for ((_, texture) in textTextureCache) {
-            texture.close()
-        }
         textTextureCache.clear()
+    }
+
+    /**
+     * Prepares the next scene's raster scale before layout/input. Allocates the sampling target
+     * early so allocation failure uses the same direct-rendering metrics. Does not clear pixels
+     * or switch targets. Follow layout with beginScene/beginRenderPass at the same logical size;
+     * drawing belongs inside that pass. Call again after resize or endScene. Headless is a no-op.
+     * Throws IllegalArgumentException for non-finite/non-positive dimensions, or SdlException
+     * if the device rejects the scale. Not allowed while recording render commands.
+     */
+    public func prepareTextLayout(logicalWidth: Float32, logicalHeight: Float32): Unit {
+        ensureRenderAccess("prepare text layout")
+        rejectDuringCommandRecording("prepareTextLayout")
+        if (logicalWidth <= 0.0 || logicalHeight <= 0.0 || logicalWidth.isNaN() || logicalHeight.isNaN() ||
+            logicalWidth.isInf() || logicalHeight.isInf()) {
+            throw IllegalArgumentException("Text layout dimensions must be finite and positive")
+        }
+        if (ptr.isNull()) {
+            return
+        }
+        refreshOutputSampling()
+        if (ssEnabled && (ssTarget.isNull() || plannedTargetWidth != ssWidth || plannedTargetHeight != ssHeight)) {
+            allocateTarget(plannedTargetWidth, plannedTargetHeight)
+        }
+        let sx = if (ssEnabled) {
+            Float32(plannedTargetWidth) / max(1.0, logicalWidth)
+        } else {
+            contentScale
+        }
+        let sy = if (ssEnabled) {
+            Float32(plannedTargetHeight) / max(1.0, logicalHeight)
+        } else {
+            contentScale
+        }
+        ensureSdl(unsafe { SDL_SetRenderScale(ptr, sx, sy) }, "SDL_SetRenderScale")
+        scaleX = sx
+        scaleY = sy
+    }
+
+    /** Actual logical-to-raster measurement scale, including current supersampling. */
+    public func textMeasurementScale(): Size {
+        ensureRenderAccess("inspect text measurement scale")
+        Size(scaleX, scaleY)
+    }
+
+    /** Resolves an explicit selector, a renderer scope, then the application font default. */
+    public func effectiveFontFamily(font!: ?String = None): ?String {
+        ensureRenderAccess("resolve font selector")
+        match (font) {
+            case Some(_) => font
+            case None => match (scopedFontFamily) {
+                case Some(_) => scopedFontFamily
+                case None => Fonts.defaultFamily()
+            }
+        }
+    }
+
+    /** Runs a synchronous operation with an inherited font; nested scopes restore on exceptions. */
+    public func withFontFamily<T>(name: String, body: () -> T): T {
+        ensureRenderAccess("enter font scope")
+        let previous = scopedFontFamily
+        scopedFontFamily = Some(name)
+        try {
+            body()
+        } finally {
+            scopedFontFamily = previous
+        }
+    }
+
+    /** Counts cached font configurations and whole-run text textures for diagnostics. */
+    public func fontCacheStats(): FontCacheStats {
+        ensureRenderAccess("inspect font cache")
+        let groups = match (textBackend) {
+            case Some(backend) => backend.fontGroupCount()
+            case None => 0
+        }
+        let atlas: (Int64, Int64, UInt64) = match (textBackend) {
+            case Some(backend) => backend.glyphAtlasStats()
+            case None => (0, 0, UInt64(0))
+        }
+        FontCacheStats(groups, textTextureCache.size(), textTextureCache.bytes(), textTextureCache.rasterizations(),
+            glyphAtlasBytes: atlas[0], cachedGlyphs: atlas[1], glyphAtlasEvictions: atlas[2])
+    }
+
+    /**
+     * Releases this renderer's cached fonts now and invalidates other renderers lazily.
+     * Close live measurement sessions first when replacing a file on platforms that lock open fonts.
+     */
+    public func reloadFonts(): Unit {
+        ensureRenderAccess("reload fonts")
+        rejectDuringCommandRecording("reloadFonts")
+        Fonts.reload()
+        synchronizeFontRegistry()
     }
 
     /** Text measurements requested since the last reset — a per-frame text-cost probe. */
@@ -1564,21 +1870,34 @@ public class Renderer {
     // Resolves a font selector to a face path for the backend: `None` (the common case) and any
     // unregistered name both yield the empty path, which the backend reads as the system UI font;
     // a registered name yields its file path. Kept here so name→path lookup happens once per call.
-    private func resolveFontFamily(font: ?String): NativeFontFamily {
+    private func resolveFontFamily(font: ?String, style: FontStyle): NativeFontFamily {
         synchronizeFontRegistry()
-        match (font) {
-            case None => NativeFontFamily("", [], "system")
-            case Some(name) => match (Fonts.pathFor(name)) {
-                case Some(path) =>
-                    let fallbacks = Fonts.fallbackPathsFor(name)
-                    var key = path
-                    for (fallback in fallbacks) {
-                        key += "|${fallback}"
-                    }
-                    NativeFontFamily(path, fallbacks, key)
-                case None => NativeFontFamily("", [], "system")
-            }
+        let family = match (effectiveFontFamily(font: font)) {
+            case None => resolvedNamedFamily(FontRole.systemUI)
+            case Some(name) => resolvedNamedFamily(name)
         }
+        family.withRequest(style.weight.value, style.variations.native(), style.variations.key())
+    }
+
+    private func resolvedNamedFamily(name: String): NativeFontFamily {
+        match (resolvedFontFamilies.get(name)) {
+            case Some(family) => return family
+            case None => ()
+        }
+        let definition = if (textBackend.isSome()) {
+            Fonts.resolveFamily(name)
+        } else {
+            Fonts.familyFor(name)
+        }
+        let family = match (definition) {
+            case Some(value) => value.native("${name.size}:${name}|${Fonts.revision()}")
+            case None => FontFamily(FontSource("")).native("system")
+        }
+        if (resolvedFontFamilies.size >= 64) {
+            resolvedFontFamilies.clear()
+        }
+        resolvedFontFamilies[name] = family
+        family
     }
 
     private func synchronizeFontRegistry(): Unit {
@@ -1587,6 +1906,12 @@ public class Renderer {
             return
         }
         observedFontRevision = revision
+        resolvedFontFamilies.clear()
+        advanceCommandEpoch()
+        match (textBackend) {
+            case Some(backend) => backend.invalidateFonts()
+            case None => ()
+        }
         metricsCache.clear()
         for ((_, cache) in namedMetricsCaches) {
             cache.clear()
@@ -1599,16 +1924,36 @@ public class Renderer {
     // hot path; each application font gets its own cache created on first use, so a named font never
     // perturbs the default font's cache or key space.
     private func metricsCacheFor(family: NativeFontFamily): TextMetricsCache {
-        if (family.primaryPath.isEmpty()) {
+        if (family.cacheKey == "system") {
             return metricsCache
         }
+        metricsCacheClock += 1
         match (namedMetricsCaches.get(family.cacheKey)) {
-            case Some(cache) => cache
+            case Some(cache) =>
+                cache.lastUse = metricsCacheClock
+                cache
             case None =>
+                trimNamedMetricsCaches()
                 let cache = TextMetricsCache(TEXT_METRICS_CAP_PER_SIZE)
+                cache.lastUse = metricsCacheClock
                 namedMetricsCaches[family.cacheKey] = cache
                 cache
         }
+    }
+
+    private func trimNamedMetricsCaches(): Unit {
+        if (namedMetricsCaches.size < 16) {
+            return
+        }
+        var oldest: UInt64 = UInt64.Max
+        var victim = ""
+        for ((key, cache) in namedMetricsCaches) {
+            if (cache.lastUse < oldest) {
+                oldest = cache.lastUse
+                victim = key
+            }
+        }
+        namedMetricsCaches.remove(victim)
     }
 
     private func textMetrics(text: String, pointSize: Float32, style: FontStyle, family: NativeFontFamily): NativeTextMetrics {
@@ -1619,7 +1964,7 @@ public class Renderer {
         // not on scaleX. Mapping it back after lookup preserves non-uniform-scale semantics and lets
         // centered controls reuse the same FreeType measurement across frames instead of missing on
         // every draw merely because the scene scale is not 1.
-        let effectivePointSize = pointSize * scaleY
+        let effectivePointSize = normalizeFontPointSize(pointSize * scaleY)
         // Fold the style flags (0..15) into the low bits of the effective-size key so bold and plain
         // runs are cached apart. The face path selects the cache without lengthening the string key.
         let sizeKey = Int64(effectivePointSize * Float32(256.0)) * 16 + Int64(flags)
@@ -1637,7 +1982,9 @@ public class Renderer {
         } else {
             // Carets, selection bands and centering decisions remain in logical units while
             // matching the exact hinted rasterization painted by the scaled text pass.
-            NativeTextMetrics(nativeMetrics.width / scaleX, nativeMetrics.height / scaleY)
+            NativeTextMetrics(nativeMetrics.width / scaleX, nativeMetrics.height / scaleY,
+                inkX: nativeMetrics.inkX / scaleX, inkY: nativeMetrics.inkY / scaleY,
+                inkWidth: nativeMetrics.inkWidth / scaleX, inkHeight: nativeMetrics.inkHeight / scaleY)
         }
     }
 
@@ -1660,7 +2007,9 @@ public class Renderer {
     // re-expressed in target pixels: SDL clip rectangles live in the current scaled space.
     private func applyClipForTextPass(): Unit {
         match (currentClipUnchecked()) {
-            case Some(rect) => setClip(Rect(rect.x * scaleX, rect.y * scaleY, rect.w * scaleX, rect.h * scaleY))
+            case Some(rect) =>
+                var raw = scaledSdlClipRect(rect, scaleX, scaleY)
+                ensureSdl(unsafe { SDL_SetRenderClipRect(ptr, inout raw) }, "SDL_SetRenderClipRect text pass")
             case None => ()
         }
     }
@@ -1806,7 +2155,7 @@ private func createTextBackend(renderer: CPointer<Unit>): ?NativeTextRenderer {
         return None
     }
     try {
-        Some(NativeTextRenderer(renderer))
+        Some(NativeTextRenderer(renderer, bootstrapSources: fontBootstrapSources()))
     } catch (error: NativeTextException) {
         throw SdlException("System UI font initialization failed: ${error.message}")
     }

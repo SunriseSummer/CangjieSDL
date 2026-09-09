@@ -106,13 +106,13 @@ public func showSimpleMessageBox(
     kind!: MessageBoxKind = MessageBoxKind.Information,
     window!: ?SdlWindow = None
 ): Unit {
+    let parent = parentWindowPtr(window)
     let cTitle = unsafe { LibC.mallocCString(title) }
     let cMessage = unsafe { LibC.mallocCString(message) }
     try (titleResource = cTitle.asResource()) {
         try (messageResource = cMessage.asResource()) {
             ensureSdl(unsafe {
-                SDL_ShowSimpleMessageBox(messageBoxFlag(kind), titleResource.value, messageResource.value,
-                    parentWindowPtr(window))
+                SDL_ShowSimpleMessageBox(messageBoxFlag(kind), titleResource.value, messageResource.value, parent)
             }, "SDL_ShowSimpleMessageBox")
         }
     }
@@ -122,6 +122,7 @@ public func showSimpleMessageBox(
  * Throws `SdlException` when options are invalid or SDL cannot show the native message box.
  */
 public func showMessageBox(options: MessageBoxOptions, window!: ?SdlWindow = None): Int32 {
+    let parent = parentWindowPtr(window)
     ensureMessageBoxOptions(options)
     let cTitle = unsafe { LibC.mallocCString(options.title) }
     let cMessage = unsafe { LibC.mallocCString(options.message) }
@@ -134,7 +135,7 @@ public func showMessageBox(options: MessageBoxOptions, window!: ?SdlWindow = Non
         fillRawButtons(rawButtons, buttonTexts, options.buttons)
         var raw = SdlMessageBoxData()
         raw.flags = messageBoxFlags(options.kind, options.buttonOrder)
-        raw.window = parentWindowPtr(window)
+        raw.window = parent
         raw.title = cTitle
         raw.message = cMessage
         raw.numbuttons = Int32(options.buttons.size)

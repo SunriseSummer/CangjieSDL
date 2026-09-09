@@ -32,6 +32,8 @@ public enum Key {
     | Space
     | Home
     | End
+    | PageUp
+    | PageDown
     | Left
     | Right
     | Up
@@ -394,6 +396,10 @@ internal func keyFromScancode(scancode: Int32): Key {
         Key.Home
     } else if (scancode == SDL_SCANCODE_END) {
         Key.End
+    } else if (scancode == SDL_SCANCODE_PAGEUP) {
+        Key.PageUp
+    } else if (scancode == SDL_SCANCODE_PAGEDOWN) {
+        Key.PageDown
     } else if (scancode == SDL_SCANCODE_RIGHT) {
         Key.Right
     } else if (scancode == SDL_SCANCODE_LEFT) {

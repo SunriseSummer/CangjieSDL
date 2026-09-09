@@ -27,6 +27,7 @@ internal enum RenderCommand {
     | DrawText(String, Float32, Float32, Color, Float32, FontStyle, ?String)
     | DrawTextRotated(String, Float32, Float32, Float64, Color, Float32, FontStyle, ?String)
     | DrawTexture(Texture, Rect, ?Rect)
+    | DrawStyledTexture(Texture, Rect, Rect, TextureStyle)
     | DrawTextureRotated(Texture, Rect, Float64, TextureRenderOptions)
     | ReplaySlot(RenderCommandSlot)
 }
@@ -367,6 +368,8 @@ private func replayRenderCommand(renderer: Renderer, command: RenderCommand, cul
             .textRotated(text, centerX, centerY, angle, color, pointSize: pointSize, style: style, font: font)
         case RenderCommand.DrawTexture(texture, destination, source) => renderer.texture(texture, destination,
             source: source)
+        case RenderCommand.DrawStyledTexture(texture, destination, source, style) => renderer.textureStyled(texture,
+            destination, source: Some(source), style: style)
         case RenderCommand.DrawTextureRotated(texture, destination, angle, options) => renderer.textureRotated(texture,
             destination, angle, options: options)
         case RenderCommand.ReplaySlot(slot) =>
