@@ -1244,7 +1244,12 @@ protected func nativeSystemFontCandidates(): Array<NativeFontSource> {
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Light.ttc",
+        "/usr/share/fonts/OTF/NotoSansCJKsc-Medium.otf",
+        "/usr/share/fonts/adobe-source-han-sans/SourceHanSansCN-Light.otf",
+        "/usr/share/fonts/harmonyos-sans/HarmonyOS_Sans_SC.ttf",
+        "/usr/share/fonts/harmonyos-sans/HarmonyOS_Sans.ttf"
     ]
     Array<NativeFontSource>(paths.size) {i => NativeFontSource(paths[i], 0)}
 }
