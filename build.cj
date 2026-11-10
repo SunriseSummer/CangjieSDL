@@ -13,8 +13,9 @@
 //      $DYLD_LIBRARY_PATH (macOS)
 //   3. the usual installation directories of the platform
 // A resolvable existing `.sdl3` library file is never overwritten; dangling
-// links are replaced with a real copy. On other platforms
-// (Android, OHOS, ...) the script is a no-op.
+// links are replaced with a real copy. `.sdl3` is a generated, git-ignored
+// build artifact. On other platforms (Android, OHOS, ...) the script is a
+// no-op.
 //
 // All output goes to cjpm's `build-script-cache/<mode>/sdl/bin/script-log`.
 
@@ -313,11 +314,13 @@ func unquote(entry: String): String {
 main(): Int64 {
     // cjpm runs this script for every module it compiles; the working
     // directory is that module's root, so `./.sdl3` is the right destination.
+    // Every stage that validates or consumes the `[ffi.c]` entries is hooked,
+    // so `.sdl3` is populated before cjpm checks it.
     let arguments = getCommandLine()
     let step = if (arguments.size > 1) { arguments[1] } else { "" }
     match (step) {
-        case "pre-build" => ensureSDL3Libraries()
-        case "pre-test" => ensureSDL3Libraries()
+        case "pre-build" | "pre-test" | "pre-bench" | "pre-run" | "pre-install" | "pre-check" | "pre-tree" | "pre-update" =>
+            ensureSDL3Libraries()
         case _ => 0
     }
 }
