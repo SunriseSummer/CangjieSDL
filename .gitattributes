@@ -1,47 +1,29 @@
-# 跨平台（Linux / Windows / macOS）统一换行符。
-# 本文件的优先级高于每台机器上的 core.autocrlf，所以不需要再要求每个人去改本地 git 配置。
-# 策略：仓库内一律存 LF，检出到任何平台也写 LF。
+# 换行符策略：仓库内一律存 LF，检出到任何平台也写 LF。
+# 优先级高于个人 core.autocrlf，无需逐人修改本地 git 配置。
 * text=auto eol=lf
 
-# 脚本类必须 LF：一旦被 Windows 写成 CRLF，WSL / Linux / macOS 下执行会报 bad interpreter
-*.sh text eol=lf
-*.bash text eol=lf
-*.py text eol=lf
+# 源码、文档与文本数据（显式声明，便于审计）
+*.cj     text eol=lf
+*.md     text eol=lf
+*.py     text eol=lf
+*.toml   text eol=lf
+*.json   text eol=lf
+*.txt    text eol=lf
+*.svg    text eol=lf
+*.xpm    text eol=lf
+LICENSE  text eol=lf
 
-# Windows 批处理必须 CRLF，否则 cmd 解析出错
-*.bat text eol=crlf
-*.cmd text eol=crlf
+# 图像资源与测试夹具：二进制，禁止换行符转换并跳过文本 diff
+*.png    binary
+*.PnG    binary
+*.jpg    binary
+*.gif    binary
+*.bmp    binary
+*.ico    binary
+*.pcx    binary
+*.ppm    binary
+*.qoi    binary
+*.tga    binary
+*.data   binary
 
-# 二进制文件：禁止任何换行符转换，同时跳过 diff
-*.png binary
-*.jpg binary
-*.jpeg binary
-*.gif binary
-*.webp binary
-*.ico binary
-*.icns binary
-*.bmp binary
-*.ttf binary
-*.otf binary
-*.woff binary
-*.woff2 binary
-*.har binary
-*.zip binary
-*.gz binary
-*.7z binary
-*.a binary
-*.so binary
-*.dll binary
-*.dylib binary
-*.mp4 binary
-*.p12 binary
-*.p7b binary
-*.cer binary
-*.jks binary
-*.keystore binary
-
-# .cer 是 PEM 文本证书（不是 DER），要按文本处理才能和仓库里已有的 LF 版本保持一致
-*.cer text eol=lf
-
-# 签名 material 是无扩展名的二进制数据
-client/signature/**/material/** binary
+# 备注：若将来加入 Windows 批处理脚本，需补充 *.bat/*.cmd text eol=crlf
