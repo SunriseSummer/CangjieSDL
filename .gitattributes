@@ -1,0 +1,29 @@
+# 换行符策略：仓库内一律存 LF，检出到任何平台也写 LF。
+# 优先级高于个人 core.autocrlf，无需逐人修改本地 git 配置。
+* text=auto eol=lf
+
+# 源码、文档与文本数据（显式声明，便于审计）
+*.cj     text eol=lf
+*.md     text eol=lf
+*.py     text eol=lf
+*.toml   text eol=lf
+*.json   text eol=lf
+*.txt    text eol=lf
+*.svg    text eol=lf
+*.xpm    text eol=lf
+LICENSE  text eol=lf
+
+# 图像资源与测试夹具：二进制，禁止换行符转换并跳过文本 diff
+*.png    binary
+*.PnG    binary
+*.jpg    binary
+*.gif    binary
+*.bmp    binary
+*.ico    binary
+*.pcx    binary
+*.ppm    binary
+*.qoi    binary
+*.tga    binary
+*.data   binary
+
+# 备注：若将来加入 Windows 批处理脚本，需补充 *.bat/*.cmd text eol=crlf

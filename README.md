@@ -22,7 +22,7 @@ CangjieSDL 是对 [SDL3](https://github.com/libsdl-org/SDL) 及其扩展组件�
 
 - Cangjie SDK `1.0.5`
 - Windows/Mac/Linux
-- [SDL-3.4.12](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.12)/[SDL_ttf-3.2.2](https://github.com/libsdl-org/SDL_ttf/releases/tag/release-3.2.2)/[SDL_image-3.4.6](https://github.com/libsdl-org/SDL_image/releases/tag/release-3.4.6) 动态库，下载到 `.sdl3/` 目录。
+- [SDL-3.4.12](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.12)/[SDL_ttf-3.2.2](https://github.com/libsdl-org/SDL_ttf/releases/tag/release-3.2.2)/[SDL_image-3.4.6](https://github.com/libsdl-org/SDL_image/releases/tag/release-3.4.6) 动态库；`Windows/Linux/macOS` 上由 `build.cj` 自动从本机取得，无需手动放置。
 
 执行单元测试，确认开发环境和项目可正常使用：
 
@@ -32,7 +32,7 @@ cjpm test
 
 > [!NOTE]
 >
-> `Windows x64` 版本动态库已经预置到 `.sdl3/` 目录，在此平台本项目开箱即用。对于 Linux、Mac、Android 等平台，请在以上官方 Release 板块下载相关发布件，将动态库文件放到 `.sdl3/` 目录中。如果官方 Release 中没有匹配平台规格的发布件，可以用系统包管理工具安装（如 Mac 上执行 `brew install sdl3 sdl3_ttf sdl3_image`），或直接从 SDL 项目源码构建。
+> 构建时根目录的 `build.cj` 会自动在本机查找 SDL3 系列动态库（依次是 `$SDL3_LIB_DIR` 指向的目录、`$LD_LIBRARY_PATH`/`$PATH`/`$DYLD_LIBRARY_PATH` 中的目录，以及系统常用目录：Linux 的 `/usr/local/lib`、`/usr/lib/x86_64-linux-gnu` 等，Windows 的 vcpkg、msys2 等，macOS 的 Homebrew `/opt/homebrew/lib`、`/usr/local/lib` 与 MacPorts `/opt/local/lib`），并以链接所需的名称复制进 `.sdl3/`，`Windows/Linux/macOS` 均无需再手动放置库文件。未找到时构建日志会给出提示，此时可安装 SDL3（apt/brew 或 vcpkg/msys2，或官方 Release 解压包——macOS 可 `brew install sdl3 sdl3_ttf sdl3_image`，或直接把 dmg 解出的 `libSDL3.dylib` 所在目录指给 `SDL3_LIB_DIR`）。对于 Android、OHOS 等平台，脚本不做处理，仍请在官方 Release 板块下载匹配平台规格的发布件，将动态库文件放到 `.sdl3/` 目录中，或直接从 SDL 项目源码构建。
 
 > [!IMPORTANT]
 >
