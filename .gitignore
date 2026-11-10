@@ -6,6 +6,8 @@ __pycache__/
 .claude/
 .idea/
 .vscode/
+.sdl3/
+.dev/
 .codegraph/
 cjpm.lock
 .cjcheck-baseline.json
