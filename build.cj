@@ -12,11 +12,17 @@
 //   2. directories from $LD_LIBRARY_PATH (Linux), $PATH (Windows),
 //      $DYLD_LIBRARY_PATH (macOS)
 //   3. the usual installation directories of the platform
+//
+// For a native build the host format is mandatory: a miss aborts the build
+// with an actionable message. For a cross build (target detected from the
+// script's own cache path) both the host and the target format are provided
+// on a best-effort basis, because cjpm does not validate `[ffi.c]` for cross
+// builds; only cross-linking an executable needs the target libraries.
+//
 // A resolvable existing `.sdl3` library file is never overwritten; dangling
 // links are replaced with a real copy. `.sdl3` is a generated, git-ignored
-// build artifact. When cross-compiling to Windows, the DLLs are provisioned
-// as well (best-effort: only executable links need them). On other platforms
-// (Android, OHOS, ...) the script is a no-op.
+// build artifact. On other platforms (Android, OHOS, ...) the script is a
+// no-op.
 //
 // All output goes to cjpm's `build-script-cache/<mode>/sdl/bin/script-log`.
 
@@ -26,36 +32,38 @@ import std.collection.ArrayList
 import std.sort.sort
 
 func ensureSDL3Libraries(): Int64 {
-    if (!supportedPlatform()) {
+    let host = hostKind()
+    if (host.isEmpty()) {
         return 0
     }
+    let target = targetKind()
+    let crossBuild = target != host
     let dest = "${getWorkingDirectory().toString()}/.sdl3"
     let searched = searchDirectories()
+    let names = ["SDL3", "SDL3_ttf", "SDL3_image"]
 
     let failures = ArrayList<String>()
-    for (name in ["SDL3", "SDL3_ttf", "SDL3_image"]) {
-        if (!provisionLibrary(dest, searched, name, libraryFileName(name), exactLibraryNames(name),
-            libraryPatterns(name))) {
-            failures.add("${dest}/${libraryFileName(name)}")
+    for (name in names) {
+        if (!provisionLibrary(dest, searched, name, host)) {
+            if (!crossBuild) {
+                failures.add("${dest}/${libraryFileName(host, name)}")
+            }
         }
     }
 
-    if (windowsCrossTarget()) {
-        // Cross-linking a Windows executable also needs the DLLs; a static
-        // library build does not, so this stays best-effort.
-        let missingDlls = ArrayList<String>()
-        for (name in ["SDL3", "SDL3_ttf", "SDL3_image"]) {
-            if (!provisionLibrary(dest, searched, name, windowsLibraryFileName(name), windowsExactNames(name),
-                windowsPatterns(name))) {
-                missingDlls.add(windowsLibraryFileName(name))
+    if (crossBuild) {
+        let missing = ArrayList<String>()
+        for (name in names) {
+            if (!provisionLibrary(dest, searched, name, target)) {
+                missing.add(libraryFileName(target, name))
             }
         }
-        if (!missingDlls.isEmpty()) {
-            println("note: cross-compiling for Windows, but these DLLs were not found locally:")
-            for (file in missingDlls) {
+        if (!missing.isEmpty()) {
+            println("note: cross-compiling for ${target}, but these target libraries were not found:")
+            for (file in missing) {
                 println("  missing .sdl3/${file} (only needed to cross-link executables)")
             }
-            println("      point $SDL3_LIB_DIR at an extracted win64 SDL3 release to provide them.")
+            println("      point $SDL3_LIB_DIR at an extracted release of the target platform.")
         }
     }
 
@@ -73,13 +81,12 @@ func ensureSDL3Libraries(): Int64 {
 }
 
 // Returns true when the target file was already present or got placed.
-func provisionLibrary(dest: String, searched: ArrayList<String>, name: String, targetFileName: String,
-    exacts: Array<String>, patterns: Array<(String, String)>): Bool {
-    let target = "${dest}/${targetFileName}"
+func provisionLibrary(dest: String, searched: ArrayList<String>, name: String, kind: String): Bool {
+    let target = "${dest}/${libraryFileName(kind, name)}"
     if (isRealFile(target)) {
         return true
     }
-    match (locateLibraryWith(searched, name, exacts, patterns)) {
+    match (locateLibrary(searched, name, exactLibraryNames(kind, name), libraryPatterns(kind, name))) {
         case Some(real) =>
             if (!exists(dest)) {
                 Directory.create(dest)
@@ -95,30 +102,12 @@ func provisionLibrary(dest: String, searched: ArrayList<String>, name: String, t
     }
 }
 
-@When[os == "Linux" || os == "Windows" || os == "macOS"]
-func supportedPlatform(): Bool {
-    true
-}
-
-@When[os != "Linux" && os != "Windows" && os != "macOS"]
-func supportedPlatform(): Bool {
-    false
-}
-
-// cjpm runs build scripts as host binaries and passes no target information;
-// the cross target triple only shows up in the script's own cache path, e.g.
-// build-script-cache/x86_64-windows-gnu/release/<module>/bin/build-script.
-func windowsCrossTarget(): Bool {
-    let arguments = getCommandLine()
-    arguments.size > 0 && arguments[0].contains("windows-gnu")
-}
-
 // Returns the real file of the first usable hit across the search path; a hit
 // that does not resolve (e.g. a dangling symlink) is skipped, not fatal.
-func locateLibraryWith(searched: ArrayList<String>, name: String, exacts: Array<String>,
+func locateLibrary(searched: ArrayList<String>, name: String, exacts: Array<String>,
     patterns: Array<(String, String)>): Option<String> {
     for (dir in searched) {
-        if (let Some(source) <- findInDirectoryWith(dir, name, exacts, patterns)) {
+        if (let Some(source) <- findInDirectory(dir, exacts, patterns)) {
             if (let Some(real) <- realPath(source)) {
                 return Some(real)
             }
@@ -152,8 +141,7 @@ func isRealFile(path: String): Bool {
 // Returns a library file usable under the requested name: an exact-name file,
 // otherwise the highest-versioned variant (e.g. libSDL3.so.3.4.12,
 // libSDL3-0.dll from mingw, or libSDL3.0.dylib from an official macOS dmg).
-func findInDirectoryWith(dir: String, name: String, exacts: Array<String>,
-    patterns: Array<(String, String)>): Option<String> {
+func findInDirectory(dir: String, exacts: Array<String>, patterns: Array<(String, String)>): Option<String> {
     if (!exists(dir)) {
         return None
     }
@@ -192,81 +180,97 @@ func findInDirectoryWith(dir: String, name: String, exacts: Array<String>,
     Some(sorted[sorted.size - 1])
 }
 
-// File names that can be used verbatim as the link-time library.
+// Platform kinds: "linux", "windows", "macos".
+
 @When[os == "Linux"]
-func exactLibraryNames(name: String): Array<String> {
-    ["lib${name}.so"]
+func hostKind(): String {
+    "linux"
 }
 
 @When[os == "Windows"]
-func exactLibraryNames(name: String): Array<String> {
-    windowsExactNames(name)
+func hostKind(): String {
+    "windows"
 }
 
 @When[os == "macOS"]
-func exactLibraryNames(name: String): Array<String> {
-    ["lib${name}.dylib"]
+func hostKind(): String {
+    "macos"
 }
 
 @When[os != "Linux" && os != "Windows" && os != "macOS"]
-func exactLibraryNames(name: String): Array<String> {
-    []
+func hostKind(): String {
+    ""
 }
 
-// Windows naming, also used when cross-compiling to Windows from another host.
-
-func windowsExactNames(name: String): Array<String> {
-    ["${name}.dll", "lib${name}.dll"]
+// cjpm compiles build scripts as host binaries and passes no target argument;
+// for cross builds the target triple only shows up in the script's own cache
+// path: <project>/build-script-cache/<triple>/<mode>/<module>/bin/build-script.
+// Native builds have <mode> directly after the cache directory.
+func targetKind(): String {
+    let arguments = getCommandLine()
+    if (arguments.isEmpty()) {
+        return hostKind()
+    }
+    let self = arguments[0].replace("\\", "/")
+    let marker = "/build-script-cache/"
+    var index = -1
+    if (let Some(value) <- self.indexOf(marker)) {
+        index = value
+    }
+    if (index < 0) {
+        return hostKind()
+    }
+    let rest = self[index + marker.size..self.size]
+    var separator = -1
+    if (let Some(value) <- rest.indexOf("/")) {
+        separator = value
+    }
+    let segment = if (separator >= 0) {
+        rest[0..separator]
+    } else {
+        rest
+    }
+    if (segment.contains("windows")) {
+        "windows"
+    } else if (segment.contains("darwin") || segment.contains("macos")) {
+        "macos"
+    } else if (segment.contains("linux")) {
+        "linux"
+    } else {
+        hostKind()
+    }
 }
 
-func windowsPatterns(name: String): Array<(String, String)> {
-    [("${name}-", ".dll"), ("lib${name}-", ".dll"), ("${name}.", ".dll")]
+// File name a library must have for cjpm to accept and link it.
+func libraryFileName(kind: String, name: String): String {
+    match (kind) {
+        case "linux" => "lib${name}.so"
+        case "windows" => "${name}.dll"
+        case "macos" => "lib${name}.dylib"
+        case _ => ""
+    }
 }
 
-func windowsLibraryFileName(name: String): String {
-    "${name}.dll"
+// File names that can be used verbatim as the link-time library.
+func exactLibraryNames(kind: String, name: String): Array<String> {
+    match (kind) {
+        case "linux" => ["lib${name}.so"]
+        case "windows" => ["${name}.dll", "lib${name}.dll"]
+        case "macos" => ["lib${name}.dylib"]
+        case _ => []
+    }
 }
 
 // (prefix, suffix) pairs for versioned/renamed variants, e.g. the SONAME
-// files of a distro package or mingw-w64's libSDL3-0.dll.
-@When[os == "Linux"]
-func libraryPatterns(name: String): Array<(String, String)> {
-    [("lib${name}.so.", "")]
-}
-
-@When[os == "Windows"]
-func libraryPatterns(name: String): Array<(String, String)> {
-    windowsPatterns(name)
-}
-
-@When[os == "macOS"]
-func libraryPatterns(name: String): Array<(String, String)> {
-    [("lib${name}.", ".dylib")]
-}
-
-@When[os != "Linux" && os != "Windows" && os != "macOS"]
-func libraryPatterns(name: String): Array<(String, String)> {
-    []
-}
-
-@When[os == "Linux"]
-func libraryFileName(name: String): String {
-    "lib${name}.so"
-}
-
-@When[os == "Windows"]
-func libraryFileName(name: String): String {
-    windowsLibraryFileName(name)
-}
-
-@When[os == "macOS"]
-func libraryFileName(name: String): String {
-    "lib${name}.dylib"
-}
-
-@When[os != "Linux" && os != "Windows" && os != "macOS"]
-func libraryFileName(name: String): String {
-    ""
+// files of a distro package, mingw-w64's libSDL3-0.dll, or the versioned
+// dylibs inside an official macOS dmg.
+func libraryPatterns(kind: String, name: String): Array<(String, String)> {
+    match (kind) {
+        case "linux" => [("lib${name}.so.", "")]
+        case "windows" => [("${name}-", ".dll"), ("lib${name}-", ".dll"), ("${name}.", ".dll")]
+        case "macos" => [("lib${name}.", ".dylib")]
+        case _ => []
+    }
 }
 
 @When[os == "Linux"]
