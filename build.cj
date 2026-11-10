@@ -37,11 +37,7 @@ func ensureSDL3Libraries(): Int64 {
         if (isRealFile(target)) {
             continue
         }
-        let usable: Option<String> = match (locateLibrary(searched, name)) {
-            case Some(source) => realPath(source)
-            case None => None
-        }
-        match (usable) {
+        match (locateLibrary(searched, name)) {
             case Some(real) =>
                 if (!destCreated) {
                     if (!exists(dest)) {
@@ -49,7 +45,7 @@ func ensureSDL3Libraries(): Int64 {
                     }
                     destCreated = true
                 }
-                if (!isRealFile(target)) {
+                if (exists(target)) {
                     remove(target)
                 }
                 copy(real, to: target)
@@ -82,10 +78,14 @@ func supportedPlatform(): Bool {
     false
 }
 
+// Returns the real file of the first usable hit across the search path; a hit
+// that does not resolve (e.g. a dangling symlink) is skipped, not fatal.
 func locateLibrary(searched: ArrayList<String>, name: String): Option<String> {
     for (dir in searched) {
-        if (let Some(file) <- findInDirectory(dir, name)) {
-            return Some(file)
+        if (let Some(source) <- findInDirectory(dir, name)) {
+            if (let Some(real) <- realPath(source)) {
+                return Some(real)
+            }
         }
     }
     None
@@ -122,7 +122,7 @@ func findInDirectory(dir: String, name: String): Option<String> {
     }
     for (exact in exactLibraryNames(name)) {
         let path = "${dir}/${exact}"
-        if (exists(path)) {
+        if (isRealFile(path)) {
             return Some(path)
         }
     }
@@ -228,9 +228,11 @@ func searchDirectories(): ArrayList<String> {
     for (dir in [
         "/usr/local/lib",
         "/usr/lib/x86_64-linux-gnu",
+        "/usr/lib/aarch64-linux-gnu",
         "/usr/lib64",
         "/usr/lib",
         "/lib/x86_64-linux-gnu",
+        "/lib/aarch64-linux-gnu",
         "/usr/local/lib64",
     ]) {
         dirs.add(dir)
@@ -290,10 +292,21 @@ func searchDirectories(): ArrayList<String> {
 func appendSplit(dirs: ArrayList<String>, variable: String, separator: String): Unit {
     if (let Some(path) <- getVariable(variable)) {
         for (entry in path.split(separator)) {
-            if (!entry.isEmpty()) {
-                dirs.add(entry)
+            let dir = unquote(entry)
+            if (!dir.isEmpty()) {
+                dirs.add(dir)
             }
         }
+    }
+}
+
+// Windows often stores quoted PATH entries ("C:\Program Files\...").
+func unquote(entry: String): String {
+    if (entry.size >= 2 && ((entry.startsWith("\"") && entry.endsWith("\"")) ||
+        (entry.startsWith("'") && entry.endsWith("'")))) {
+        entry[1..entry.size - 1]
+    } else {
+        entry
     }
 }
 
