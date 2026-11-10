@@ -12,13 +12,14 @@
 //   2. directories from $LD_LIBRARY_PATH (Linux), $PATH (Windows),
 //      $DYLD_LIBRARY_PATH (macOS)
 //   3. the usual installation directories of the platform
-// An existing `.sdl3` library file is never overwritten. On other platforms
+// A resolvable existing `.sdl3` library file is never overwritten; dangling
+// links are replaced with a real copy. On other platforms
 // (Android, OHOS, ...) the script is a no-op.
 //
 // All output goes to cjpm's `build-script-cache/<mode>/sdl/bin/script-log`.
 
 import std.env.{getCommandLine, getVariable, getWorkingDirectory}
-import std.fs.{Directory, copy, exists}
+import std.fs.{Directory, canonicalize, copy, exists, remove}
 import std.collection.ArrayList
 import std.sort.sort
 
@@ -33,19 +34,26 @@ func ensureSDL3Libraries(): Int64 {
     let failures = ArrayList<String>()
     for (name in ["SDL3", "SDL3_ttf", "SDL3_image"]) {
         let target = "${dest}/${libraryFileName(name)}"
-        if (exists(target)) {
+        if (isRealFile(target)) {
             continue
         }
-        match (locateLibrary(searched, name)) {
-            case Some(source) =>
+        let usable: Option<String> = match (locateLibrary(searched, name)) {
+            case Some(source) => realPath(source)
+            case None => None
+        }
+        match (usable) {
+            case Some(real) =>
                 if (!destCreated) {
                     if (!exists(dest)) {
                         Directory.create(dest)
                     }
                     destCreated = true
                 }
-                copy(source, to: target)
-                println("linked SDL library: ${source} -> ${target}")
+                if (!isRealFile(target)) {
+                    remove(target)
+                }
+                copy(real, to: target)
+                println("linked SDL library: ${real} -> ${target}")
             case None =>
                 failures.add(target)
         }
@@ -81,6 +89,28 @@ func locateLibrary(searched: ArrayList<String>, name: String): Option<String> {
         }
     }
     None
+}
+
+// Resolves symlinks to the real file. std.fs.copy preserves symlinks verbatim,
+// which would leave dangling links inside `.sdl3` when only the source side
+// has the versioned file; cjpm canonicalizes ffi.c entries itself, so only a
+// resolvable real file is usable.
+func realPath(path: String): Option<String> {
+    try {
+        Some(canonicalize(path).toString())
+    } catch (error: Exception) {
+        println("warning: skipping unusable ${path}: ${error.message}")
+        None
+    }
+}
+
+func isRealFile(path: String): Bool {
+    try {
+        canonicalize(path)
+        true
+    } catch (error: Exception) {
+        false
+    }
 }
 
 // Returns a library file usable under `libraryFileName(name)`: an exact-name
